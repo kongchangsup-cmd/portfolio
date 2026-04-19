@@ -525,10 +525,9 @@ function renderAllocFromPortfolio() {
             <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
               <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
               <div style="font-size:14px;font-weight:600;color:var(--text)">${r.label}</div>
-              <div style="font-size:10px;color:var(--hint)">${r.count}종목</div>
             </div>
             <div style="font-size:11px;color:var(--hint);padding-left:17px">
-              목표금액 ${fmt(r.targetAmt)}원
+              ${r.count}종목
             </div>
           </div>
           <div style="text-align:right">
@@ -540,7 +539,7 @@ function renderAllocFromPortfolio() {
         <!-- 진행율 바 -->
         <div style="margin-bottom:9px">
           <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--hint);margin-bottom:3px">
-            <span>목표 <strong style="color:var(--text)">${r.targetPct.toFixed(2)}%</strong></span>
+            <span>목표 <strong style="color:var(--text)">${fmt(r.targetAmt)}원</strong></span>
             <span>진행율 <strong style="color:${r.progress >= 100 ? '#0f7a50' : '#1a6fc4'}">${r.progress.toFixed(2)}%</strong></span>
           </div>
           <div style="position:relative;height:6px;background:var(--bar-bg);border-radius:3px;overflow:hidden">

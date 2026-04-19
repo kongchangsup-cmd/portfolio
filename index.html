@@ -812,7 +812,7 @@ async function renderAsset() {
         { label:'부동산',     val: 부동산, color:'#1a6fc4', sub:`전체의 ${부동산비율}%` },
         { label:'현금/투자',  val: 현금,   color:'#0f7a50', sub:`전체의 ${현금비율}%` },
         { label:'금',         val: 금,     color:'#8b6914', sub:`전체의 ${금비율}%` },
-        { label:'은퇴 후 월 사용가능', val: 월사용, color:'#c0392b', sub:`연 ${fmt(년사용)}원` },
+        { label:'은퇴 후 월 사용가능', val: 월사용, color:'#c0392b', sub:`연 ${fmt(년사용)}원 (부동산 0.5배 축소 · 4% 룰)` },
       ].map(item => `
         <div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid ${item.color};border-radius:0 12px 12px 0;padding:12px 13px">
           <div style="font-size:11px;color:var(--hint);margin-bottom:4px">${item.label}</div>
@@ -850,8 +850,9 @@ async function renderAsset() {
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">누적수익율</div>
           <div style="font-size:11px;font-weight:600" class="${clr(ac.누적수익율)}">${fmtPct(ac.누적수익율)}</div>
         </div>
-      </div>
-      <div style="border-top:0.5px solid var(--border);padding-top:8px">
+      </div>` : ''}
+      ${ac.yr원금 !== null ? `
+      <div style="${ac.원금 !== null ? 'border-top:0.5px solid var(--border);padding-top:8px' : ''}">
         <div style="font-size:9px;color:var(--hint);margin-bottom:5px">${cur년도}년 성과</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
           <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">

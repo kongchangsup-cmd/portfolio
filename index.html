@@ -504,6 +504,7 @@ function renderAllocFromPortfolio() {
 
   const rows = ALLOC_DEF.map(def => {
     const plAmt  = def.fixedPl  !== undefined ? def.fixedPl  : (plByKey[def.key]  || 0);
+    const buyAmt = buyByKey[def.key] || def.sheetEval;
     const plr    = def.fixedPlr !== undefined ? def.fixedPlr : (buyAmt > 0 ? plAmt / buyAmt * 100 : 0);
     const count  = allData.filter(d => d.cat === def.key).length;
     return { ...def, plAmt, plr, count };

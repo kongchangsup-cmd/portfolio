@@ -308,6 +308,7 @@ function parseRows(values) {
       no, name,
       trade: parseInt(row[2]) || 0,
       price: p(row[3]),
+      target: p(row[4]),
       buy: p(row[5]),
       prog: p(row[6]),
       eval: evalAmt,
@@ -437,7 +438,10 @@ function renderCards() {
       <div class="card-top">
         <div>
           <div class="card-name">${d.name}${d.trade > 0 ? `<span class="trade-badge">매매 ${d.trade}주</span>` : ''}</div>
-          <div class="card-price">현재가 ${fmt(d.price)}원</div>
+          <div class="card-price">
+            <span style="color:var(--text);font-weight:500">목표 ${fmt(d.target)}원</span>
+            <span style="margin-left:6px;color:var(--hint)">현재 ${fmt(d.price)}원</span>
+          </div>
         </div>
         <div class="card-eval-wrap">
           <div class="card-eval">${fmt(d.eval)}원</div>

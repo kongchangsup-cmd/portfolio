@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>내 투자 현황</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --sub: #888;
+    --hint: #bbb;
+    --border: rgba(0,0,0,0.1);
+    --pos: #0f7a50;
+    --neg: #c0392b;
+    --blue: #1a6fc4;
+    --trade: #c0392b;
+    --input-bg: #f9f9f6;
+    --bar-bg: #e8e8e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111116;
+      --card: #1c1c24;
+      --text: #e8e8f0;
+      --sub: #888;
+      --hint: #555;
+      --border: rgba(255,255,255,0.1);
+      --pos: #2db882;
+      --neg: #e55c4a;
+      --blue: #5ba3e8;
+      --trade: #e55c4a;
+      --input-bg: #16161e;
+      --bar-bg: #2a2a35;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* 셋업 */
+  .setup { padding: 24px 18px; max-width: 440px; margin: 0 auto; }
+  .setup-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 18px; padding: 26px 20px; }
+  .setup h2 { font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+  .setup p { font-size: 13px; color: var(--sub); line-height: 1.6; margin-bottom: 20px; }
+  .sheet-info { background: var(--input-bg); border-radius: 10px; padding: 10px 13px; font-size: 12px; color: var(--sub); margin-bottom: 16px; border: 0.5px solid var(--border); }
+  .sheet-info strong { display: block; font-size: 13px; color: var(--text); margin-bottom: 2px; }
+  .field-label { font-size: 12px; color: var(--sub); margin-bottom: 5px; }
+  input[type=password], input[type=text] {
+    width: 100%; padding: 12px 14px; font-size: 14px;
+    background: var(--input-bg); border: 0.5px solid var(--border);
+    border-radius: 10px; color: var(--text); outline: none; margin-bottom: 12px;
+  }
+  .btn-primary {
+    width: 100%; padding: 13px; font-size: 15px; font-weight: 600;
+    background: var(--blue); color: #fff; border: none; border-radius: 12px; cursor: pointer;
+  }
+  .steps { background: var(--input-bg); border-radius: 10px; padding: 12px 14px; margin-top: 16px; border: 0.5px solid var(--border); }
+  .steps h4 { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+  .steps ol { font-size: 12px; color: var(--sub); padding-left: 16px; line-height: 1.9; }
+
+  /* 메인 */
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 10px; background: var(--card); border-bottom: 0.5px solid var(--border); position: sticky; top: 0; z-index: 10; }
+  .topbar-left h1 { font-size: 16px; font-weight: 600; }
+  .topbar-left p { font-size: 11px; color: var(--hint); margin-top: 2px; }
+  .topbar-btns { display: flex; gap: 7px; }
+  .icon-btn { background: var(--input-bg); border: 0.5px solid var(--border); border-radius: 9px; padding: 7px 11px; font-size: 14px; cursor: pointer; color: var(--text); }
+
+  /* 오류 */
+  .error-box { margin: 10px 14px; padding: 10px 13px; background: #fff0ee; border: 0.5px solid #f5c0b8; border-radius: 10px; font-size: 12px; color: #a33; }
+  @media (prefers-color-scheme: dark) { .error-box { background: #2a1515; border-color: #5a2020; color: #f88; } }
+
+  /* 요약 카드 */
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px 8px; }
+  .s-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .s-label { font-size: 11px; color: var(--hint); margin-bottom: 4px; }
+  .s-value { font-size: 14px; font-weight: 600; }
+
+  /* 토글 + 정렬 */
+  .ctrl-row { display: flex; justify-content: space-between; align-items: center; padding: 0 14px 8px; gap: 8px; }
+  .toggle-group { display: flex; gap: 6px; }
+  .toggle-btn { padding: 5px 12px; font-size: 11px; border-radius: 20px; cursor: pointer; border: 0.5px solid var(--border); background: var(--card); color: var(--sub); transition: all .15s; }
+  .toggle-btn.on { background: #e8f0fc; border-color: #aac4f0; color: #1a5cb0; }
+  @media (prefers-color-scheme: dark) { .toggle-btn.on { background: #1a2a42; border-color: #3a5a90; color: #7ab0f0; } }
+  select { font-size: 11px; padding: 5px 8px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
+
+  /* 카테고리 필터 */
+  .cat-row { display: flex; gap: 6px; padding: 0 14px 10px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  .cat-row::-webkit-scrollbar { display: none; }
+  .cat-btn { flex-shrink: 0; padding: 4px 11px; font-size: 11px; border-radius: 20px; cursor: pointer; border: 0.5px solid var(--border); background: var(--card); color: var(--sub); white-space: nowrap; }
+  .cat-btn.on { background: var(--input-bg); border-color: var(--sub); color: var(--text); font-weight: 600; }
+
+  /* 종목 카드 */
+  .cards-wrap { padding: 0 14px 32px; }
+  .stock-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 14px; padding: 12px 13px; margin-bottom: 7px; }
+  .stock-card.trade { border-left: 3px solid var(--trade); border-radius: 0 14px 14px 0; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .card-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-right: 8px; }
+  .trade-badge { font-size: 10px; color: var(--trade); margin-left: 5px; font-weight: 500; }
+  .card-price { font-size: 10px; color: var(--hint); margin-top: 2px; }
+  .card-eval-wrap { text-align: right; }
+  .card-eval { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .card-eval-lbl { font-size: 10px; color: var(--hint); margin-top: 1px; }
+
+  /* 진행율 바 */
+  .prog-wrap { margin-bottom: 9px; }
+  .prog-meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--hint); margin-bottom: 3px; }
+  .prog-bg { height: 3px; background: var(--bar-bg); border-radius: 2px; overflow: hidden; }
+  .prog-fill { height: 100%; background: #378ADD; border-radius: 2px; }
+
+  /* 수익 박스 */
+  .pl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pl-box { background: var(--input-bg); border-radius: 8px; padding: 7px 9px; }
+  .pl-lbl { font-size: 10px; color: var(--hint); margin-bottom: 2px; }
+  .pl-amt { font-size: 12px; font-weight: 600; }
+  .pl-pct { font-size: 10px; margin-top: 1px; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .empty { text-align: center; padding: 32px; font-size: 13px; color: var(--hint); }
+  .loading { text-align: center; padding: 32px; font-size: 13px; color: var(--hint); }
+</style>
+</head>
+<body>
+
+<!-- 셋업 화면 -->
+<div class="screen" id="setup-screen">
+  <div class="setup">
+    <div class="setup-card">
+      <h2>투자 현황 앱 연결</h2>
+      <p>구글 시트에서 실시간으로 투자 데이터를 불러옵니다.<br>API 키 한 번만 입력하면 이후 자동 연결됩니다.</p>
+      <div class="sheet-info">
+        <strong>📊 Ver04_2026_자산관리</strong>
+        종목요약 탭 · 자동 연결됨
+      </div>
+      <div class="field-label">Google Sheets API Key</div>
+      <input type="password" id="api-key-input" placeholder="AIza..." />
+      <button class="btn-primary" onclick="connectSheet()">연결하기</button>
+      <div class="steps">
+        <h4>API 키 발급 방법</h4>
+        <ol>
+          <li>Google Cloud Console 접속</li>
+          <li>프로젝트 생성 → Google Sheets API 활성화</li>
+          <li>사용자 인증 정보 → API 키 만들기</li>
+          <li>시트 공유 → 링크 있는 모든 사용자(뷰어)</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 메인 화면 -->
+<div class="screen" id="main-screen">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>내 투자 현황</h1>
+      <p id="update-time">불러오는 중...</p>
+    </div>
+    <div class="topbar-btns">
+      <button class="icon-btn" onclick="refresh()" id="refresh-btn">↻</button>
+      <button class="icon-btn" onclick="goSetup()">⚙</button>
+    </div>
+  </div>
+
+  <div id="error-area"></div>
+  <div class="summary-grid" id="summary-grid"></div>
+
+  <div class="ctrl-row">
+    <div class="toggle-group">
+      <button class="toggle-btn on" id="btn-pl1" onclick="setMode('pl1')">수익1 미실현</button>
+      <button class="toggle-btn" id="btn-pl2" onclick="setMode('pl2')">수익2 실현포함</button>
+    </div>
+    <select id="sort-select" onchange="renderCards()">
+      <option value="eval">평가금 순</option>
+      <option value="plr">수익률 순</option>
+      <option value="prog">진행율 순</option>
+    </select>
+  </div>
+
+  <div class="cat-row" id="cat-row"></div>
+  <div class="cards-wrap" id="cards-wrap">
+    <div class="loading">데이터를 불러오는 중...</div>
+  </div>
+</div>
+
+<script>
+const SHEET_ID = '1hC2y_8GiZ_Nz18Fe7XvC_Ve1D7urxpCQTYpGvBvJgGU';
+const SHEET_TAB = '종목요약';
+const CATS = ['전체','미국주식','한국주식','기타주식','미국채권','한국채권','원자재','리츠/자산','현금성'];
+
+let allData = [];
+let mode = 'pl1';
+let curCat = '전체';
+
+// ── 유틸
+const fmt = n => new Intl.NumberFormat('ko-KR').format(Math.round(n));
+const fmtPct = n => (n >= 0 ? '+' : '') + parseFloat(n).toFixed(2) + '%';
+const clr = n => n >= 0 ? 'pos' : 'neg';
+
+function getCategory(name) {
+  if (/30년국채|하이일드|투자등급/.test(name)) return '미국채권';
+  if (/국고채|종합채권|TDF/.test(name)) return '한국채권';
+  if (/차이나|일본TOPIX|인도|유로|대만/.test(name)) return '기타주식';
+  if (/금현물|구리|희토류|은액티브|WTI/.test(name)) return '원자재';
+  if (/리츠|리얼티|인프라|글로벌인컴/.test(name)) return '리츠/자산';
+  if (/머니마켓|초단기채권|CD금리|SOFR/.test(name)) return '현금성';
+  if (/미국|나스닥|S&P|테슬라|엔비디아|구글|메디컬|양자/.test(name)) return '미국주식';
+  return '한국주식';
+}
+
+function parseRows(values) {
+  const items = [];
+  let no = 0;
+  for (const row of values) {
+    const name = (row[1] || '').trim();
+    if (!name || /매매|순번|종목명|EFT|NO/.test(name)) continue;
+    const p = v => parseFloat(String(v || '0').replace(/[,%₩]/g, '')) || 0;
+    const evalAmt = p(row[7]);
+    if (evalAmt < 1000) continue;
+    no++;
+    items.push({
+      no, name,
+      trade: parseInt(row[2]) || 0,
+      price: p(row[3]),
+      buy: p(row[5]),
+      prog: p(row[6]),
+      eval: evalAmt,
+      pl1: p(row[8]), plr1: p(row[9]),
+      pl2: p(row[10]), plr2: p(row[11]),
+      cat: getCategory(name),
+    });
+  }
+  return items;
+}
+
+// ── API 연결
+async function connectSheet() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { alert('API 키를 입력해 주세요.'); return; }
+  localStorage.setItem('invest_api_key', key);
+  showScreen('main-screen');
+  await loadData(key);
+}
+
+async function loadData(key) {
+  document.getElementById('refresh-btn').textContent = '...';
+  document.getElementById('error-area').innerHTML = '';
+  try {
+    const tab = encodeURIComponent(SHEET_TAB);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tab}!A:L?key=${key}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error?.message || `오류 ${res.status}`);
+    }
+    const json = await res.json();
+    const rows = (json.values || []).slice(1);
+    allData = parseRows(rows);
+    if (allData.length === 0) throw new Error('종목요약 탭에서 데이터를 찾지 못했습니다.');
+    document.getElementById('update-time').textContent =
+      new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준 · 종목요약 탭';
+    renderSummary();
+    renderCards();
+  } catch (e) {
+    document.getElementById('error-area').innerHTML =
+      `<div class="error-box">⚠ ${e.message}</div>`;
+  } finally {
+    document.getElementById('refresh-btn').textContent = '↻';
+  }
+}
+
+async function refresh() {
+  const key = localStorage.getItem('invest_api_key');
+  if (key) await loadData(key);
+}
+
+function goSetup() { showScreen('setup-screen'); }
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── 모드
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-pl1').className = 'toggle-btn' + (m === 'pl1' ? ' on' : '');
+  document.getElementById('btn-pl2').className = 'toggle-btn' + (m === 'pl2' ? ' on' : '');
+  renderSummary();
+  renderCards();
+}
+
+// ── 요약
+function renderSummary() {
+  const items = filtered();
+  const tBuy = items.reduce((s, d) => s + d.buy, 0);
+  const tEval = items.reduce((s, d) => s + d.eval, 0);
+  const pl = items.reduce((s, d) => s + (mode === 'pl1' ? d.pl1 : d.pl2), 0);
+  const pr = tBuy > 0 ? (pl / tBuy * 100) : 0;
+  const plLabel = mode === 'pl1' ? '수익1 (미실현)' : '수익2 (실현포함)';
+  document.getElementById('summary-grid').innerHTML = [
+    { label: '총 평가금액', val: fmt(tEval) + '원', cls: '' },
+    { label: '총 매수금액', val: fmt(tBuy) + '원', cls: '' },
+    { label: plLabel, val: fmt(pl) + '원', cls: clr(pl) },
+    { label: '수익률', val: fmtPct(pr), cls: clr(pr) },
+  ].map(c => `<div class="s-card">
+    <div class="s-label">${c.label}</div>
+    <div class="s-value ${c.cls}">${c.val}</div>
+  </div>`).join('');
+}
+
+// ── 카테고리
+function initCats() {
+  document.getElementById('cat-row').innerHTML = CATS.map(c =>
+    `<button class="cat-btn${c === curCat ? ' on' : ''}" onclick="setCat('${c}')">${c}</button>`
+  ).join('');
+}
+
+function setCat(c) {
+  curCat = c;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('on', b.textContent === c));
+  renderSummary();
+  renderCards();
+}
+
+// ── 정렬 + 필터
+function filtered() {
+  return curCat === '전체' ? allData : allData.filter(d => d.cat === curCat);
+}
+
+function sorted(items) {
+  const by = document.getElementById('sort-select').value;
+  return [...items].sort((a, b) => {
+    if (by === 'eval') return b.eval - a.eval;
+    if (by === 'plr') return (mode === 'pl1' ? b.plr1 - a.plr1 : b.plr2 - a.plr2);
+    if (by === 'prog') return b.prog - a.prog;
+    return 0;
+  });
+}
+
+// ── 카드
+function renderCards() {
+  const items = sorted(filtered());
+  const wrap = document.getElementById('cards-wrap');
+  if (!items.length) { wrap.innerHTML = '<div class="empty">해당 종목이 없습니다</div>'; return; }
+  wrap.innerHTML = items.map(d => {
+    const prog = Math.min(Math.max(d.prog, 0), 100);
+    return `<div class="stock-card${d.trade > 0 ? ' trade' : ''}">
+      <div class="card-top">
+        <div>
+          <div class="card-name">${d.name}${d.trade > 0 ? `<span class="trade-badge">매매 ${d.trade}주</span>` : ''}</div>
+          <div class="card-price">현재가 ${fmt(d.price)}원</div>
+        </div>
+        <div class="card-eval-wrap">
+          <div class="card-eval">${fmt(d.eval)}원</div>
+          <div class="card-eval-lbl">평가금액</div>
+        </div>
+      </div>
+      <div class="prog-wrap">
+        <div class="prog-meta">
+          <span>진행율 ${d.prog.toFixed(1)}%</span>
+          <span>매수 ${fmt(d.buy)}원</span>
+        </div>
+        <div class="prog-bg"><div class="prog-fill" style="width:${prog}%"></div></div>
+      </div>
+      <div class="pl-row">
+        <div class="pl-box">
+          <div class="pl-lbl">수익1 (미실현)</div>
+          <div class="pl-amt ${clr(d.pl1)}">${fmt(d.pl1)}원</div>
+          <div class="pl-pct ${clr(d.plr1)}">${fmtPct(d.plr1)}</div>
+        </div>
+        <div class="pl-box">
+          <div class="pl-lbl">수익2 (실현포함)</div>
+          <div class="pl-amt ${clr(d.pl2)}">${fmt(d.pl2)}원</div>
+          <div class="pl-pct ${clr(d.plr2)}">${fmtPct(d.plr2)}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 초기화
+window.onload = () => {
+  initCats();
+  const savedKey = localStorage.getItem('invest_api_key');
+  if (savedKey) {
+    showScreen('main-screen');
+    loadData(savedKey);
+  } else {
+    showScreen('setup-screen');
+  }
+};
+</script>
+</body>
+</html>

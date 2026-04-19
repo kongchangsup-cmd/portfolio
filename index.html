@@ -464,14 +464,14 @@ async function refreshAlloc() {
 // ── 자산배분 계산 (종목 데이터 기반)
 // 자산배분 탭 실제 값 (D열=목표금액, J열=평가금액, M열=진행율)
 const ALLOC_DEF = [
-  { key:'미국주식', label:'주식 · 미국', color:'#1a6fc4', targetPct:26.66, targetAmt:128021044, sheetEval:45283870,  progress:35.37 },
-  { key:'한국주식', label:'주식 · 한국', color:'#0f7a50', targetPct:32.48, targetAmt:155978945, sheetEval:69648535,  progress:44.65 },
-  { key:'기타주식', label:'주식 · 기타', color:'#6a5acd', targetPct:9.38,  targetAmt:45047560,  sheetEval:23197690,  progress:51.50 },
-  { key:'미국채권', label:'채권 · 미국', color:'#e8922a', targetPct:4.53,  targetAmt:21752713,  sheetEval:20468050,  progress:94.09 },
-  { key:'한국채권', label:'채권 · 한국', color:'#c0392b', targetPct:4.08,  targetAmt:19596224,  sheetEval:23132010,  progress:118.04 },
-  { key:'원자재',   label:'원자재',      color:'#8b6914', targetPct:10.12, targetAmt:48586201,  sheetEval:14577365,  progress:30.00 },
-  { key:'리츠/자산',label:'리츠/자산',   color:'#2e8b8b', targetPct:9.22,  targetAmt:44262999,  sheetEval:24369260,  progress:55.06 },
-  { key:'현금성',   label:'현금성',      color:'#888',    targetPct:3.54,  targetAmt:16989182,  sheetEval:213396305, progress:1256.07, fixedPl:2565069, fixedPlr:1.22 },
+  { key:'미국주식', label:'주식 · 미국', color:'#1a6fc4', targetPct:26.66, targetAmt:128021044, sheetEval:45283870,  sheetBuy:36025113,  progress:35.37 },
+  { key:'한국주식', label:'주식 · 한국', color:'#0f7a50', targetPct:32.48, targetAmt:155978945, sheetEval:69648535,  sheetBuy:51648445,  progress:44.65 },
+  { key:'기타주식', label:'주식 · 기타', color:'#6a5acd', targetPct:9.38,  targetAmt:45047560,  sheetEval:23197690,  sheetBuy:21597905,  progress:51.50 },
+  { key:'미국채권', label:'채권 · 미국', color:'#e8922a', targetPct:4.53,  targetAmt:21752713,  sheetEval:20468050,  sheetBuy:19466805,  progress:94.09 },
+  { key:'한국채권', label:'채권 · 한국', color:'#c0392b', targetPct:4.08,  targetAmt:19596224,  sheetEval:23132010,  sheetBuy:23332126,  progress:118.04 },
+  { key:'원자재',   label:'원자재',      color:'#8b6914', targetPct:10.12, targetAmt:48586201,  sheetEval:14577365,  sheetBuy:11306040,  progress:30.00 },
+  { key:'리츠/자산',label:'리츠/자산',   color:'#2e8b8b', targetPct:9.22,  targetAmt:44262999,  sheetEval:24369260,  sheetBuy:22475444,  progress:55.06 },
+  { key:'현금성',   label:'현금성',      color:'#888',    targetPct:3.54,  targetAmt:16989182,  sheetEval:213396305, sheetBuy:210831236, progress:1256.07, fixedPl:2565069, fixedPlr:1.22 },
 ];
 
 function renderAllocFromPortfolio() {
@@ -527,7 +527,7 @@ function renderAllocFromPortfolio() {
               <div style="font-size:14px;font-weight:600;color:var(--text)">${r.label}</div>
             </div>
             <div style="font-size:11px;color:var(--hint);padding-left:17px">
-              ${r.count}종목
+              매수 ${fmt(r.sheetBuy)}원
             </div>
           </div>
           <div style="text-align:right">

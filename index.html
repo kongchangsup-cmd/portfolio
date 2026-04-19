@@ -678,11 +678,12 @@ const ACCOUNT_COLORS = {
 
 async function loadAssetData(key) {
   const cur년도 = new Date().getFullYear();
-  const 자산이력행 = cur년도 - 2020; // 2026→6, 2027→7...
-  const yr = String(cur년도).slice(2); // "26", "27"...
+  const 자산이력행 = cur년도 - 2020;     // 2026→6, 2027→7...
+  const 전년도행   = 자산이력행 - 1;     // 2026→5, 2027→6... (전년말 현금 = 올해 원금)
+  const yr = String(cur년도).slice(2);   // "26", "27"...
 
-  // 자산이력 탭: B~Q열, 해당 연도 행
-  const url1 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%EC%9E%90%EC%82%B0%EC%9D%B4%EB%A0%A5!A${자산이력행}:Q${자산이력행}?key=${key}`;
+  // 자산이력: 전년도행~현재행 두 행을 한번에 읽기
+  const url1 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%EC%9E%90%EC%82%B0%EC%9D%B4%EB%A0%A5!A${전년도행}:Q${자산이력행}?key=${key}`;
   // 현금자산 탭: 전체 읽기
   const url2 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%ED%98%84%EA%B8%88%EC%9E%90%EC%82%B0!A1:R20?key=${key}`;
 
@@ -695,8 +696,11 @@ async function loadAssetData(key) {
   const p = v => parseFloat(String(v||'0').replace(/[,%₩]/g,'')) || 0;
   const pPct = v => { const n = parseFloat(String(v||'0').replace(/[,%₩]/g,'')); return Math.abs(n) < 2 ? n*100 : n; };
 
-  // 자산이력 행 파싱 (A=0, B=1, D=3, E=4, F=5, I=8, J=9, Q=16)
-  const ar = (j1.values||[[]])[0] || [];
+  // 두 행 중 첫 행=전년도, 두 번째 행=현재연도
+  const prev_ar = (j1.values||[[]])[0] || []; // 전년도 행 (원금 기준)
+  const ar      = (j1.values||[[]])[1] || []; // 현재연도 행
+
+  // 자산이력 파싱 (A=0, B=1, D=3, E=4, F=5, I=8, J=9, Q=16)
   const 자산 = {
     부동산:   p(ar[1]),
     현금:     p(ar[3]),
@@ -705,6 +709,7 @@ async function loadAssetData(key) {
     투자성과: p(ar[8]),
     저축:     p(ar[9]),
     월사용:   p(ar[16]),
+    원금:     p(prev_ar[3]), // 전년도말 D열 현금 = 올해 원금
   };
 
   // 현금자산 탭 파싱
@@ -787,7 +792,7 @@ async function renderAsset() {
       now.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) +
       ` 기준 · ${cur년도}년 자동`;
 
-  const { 부동산, 현금, 금, 총자산, 투자성과, 저축, 월사용 } = 자산;
+  const { 부동산, 현금, 금, 총자산, 투자성과, 저축, 월사용, 원금 } = 자산;
   const 자산이력행 = cur년도 - 2020;
   const 부동산비율 = (부동산 / 총자산 * 100).toFixed(1);
   const 현금비율   = (현금   / 총자산 * 100).toFixed(1);
@@ -842,15 +847,17 @@ async function renderAsset() {
           <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(합계.예상수익)}원</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 원금</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(합계.yr원금)}원</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 원금 (전년말 기준)</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(원금)}원</div>
         </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(합계.yr수익)}">${fmt(합계.yr수익)}원</div>
+        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 수익</div>
+          <div style="font-size:14px;font-weight:600" class="${clr(합계.yr수익)}">${fmt(합계.yr수익)}원</div>
         </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익율</div>
           <div style="font-size:11px;font-weight:600" class="${clr(합계.yr수익율)}">${fmtPct(합계.yr수익율)}</div>
@@ -858,6 +865,10 @@ async function renderAsset() {
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">년환산수익율</div>
           <div style="font-size:11px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
+        </div>
+        <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
+          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 참조원금</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(합계.yr원금)}원</div>
         </div>
       </div>
       <div style="border-top:0.5px solid var(--border);padding-top:8px">

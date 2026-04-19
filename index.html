@@ -695,14 +695,16 @@ async function loadAssetData(key) {
   const p = v => parseFloat(String(v||'0').replace(/[,%₩]/g,'')) || 0;
   const pPct = v => { const n = parseFloat(String(v||'0').replace(/[,%₩]/g,'')); return Math.abs(n) < 2 ? n*100 : n; };
 
-  // 자산이력 행 파싱 (A=0, B=1, D=3, E=4, F=5, Q=16)
+  // 자산이력 행 파싱 (A=0, B=1, D=3, E=4, F=5, I=8, J=9, Q=16)
   const ar = (j1.values||[[]])[0] || [];
   const 자산 = {
-    부동산: p(ar[1]),
-    현금:   p(ar[3]),
-    금:     p(ar[4]),
-    총자산: p(ar[5]),
-    월사용: p(ar[16]),
+    부동산:   p(ar[1]),
+    현금:     p(ar[3]),
+    금:       p(ar[4]),
+    총자산:   p(ar[5]),
+    투자성과: p(ar[8]),
+    저축:     p(ar[9]),
+    월사용:   p(ar[16]),
   };
 
   // 현금자산 탭 파싱
@@ -785,7 +787,7 @@ async function renderAsset() {
       now.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) +
       ` 기준 · ${cur년도}년 자동`;
 
-  const { 부동산, 현금, 금, 총자산, 월사용 } = 자산;
+  const { 부동산, 현금, 금, 총자산, 투자성과, 저축, 월사용 } = 자산;
   const 자산이력행 = cur년도 - 2020;
   const 부동산비율 = (부동산 / 총자산 * 100).toFixed(1);
   const 현금비율   = (현금   / 총자산 * 100).toFixed(1);
@@ -840,7 +842,7 @@ async function renderAsset() {
           <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(합계.예상수익)}원</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:8px">
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 원금</div>
           <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(합계.yr원금)}원</div>
@@ -856,6 +858,19 @@ async function renderAsset() {
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">년환산수익율</div>
           <div style="font-size:11px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
+        </div>
+      </div>
+      <div style="border-top:0.5px solid var(--border);padding-top:8px">
+        <div style="font-size:9px;color:var(--hint);margin-bottom:6px">${yr}년 자산증가 원천</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자성과 (I열)</div>
+            <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과)}">${fmt(자산.투자성과)}원</div>
+          </div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축 (J열)</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.저축)}원</div>
+          </div>
         </div>
       </div>
     </div>

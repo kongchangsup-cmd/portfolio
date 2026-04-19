@@ -471,7 +471,7 @@ const ALLOC_DEF = [
   { key:'한국채권', label:'채권 · 한국', color:'#c0392b', targetPct:4.08,  targetAmt:19596224,  sheetEval:23132010,  progress:118.04 },
   { key:'원자재',   label:'원자재',      color:'#8b6914', targetPct:10.12, targetAmt:48586201,  sheetEval:14577365,  progress:30.00 },
   { key:'리츠/자산',label:'리츠/자산',   color:'#2e8b8b', targetPct:9.22,  targetAmt:44262999,  sheetEval:24369260,  progress:55.06 },
-  { key:'현금성',   label:'현금성',      color:'#888',    targetPct:3.54,  targetAmt:16989182,  sheetEval:213396305, progress:1256.07 },
+  { key:'현금성',   label:'현금성',      color:'#888',    targetPct:3.54,  targetAmt:16989182,  sheetEval:213396305, progress:1256.07, fixedPl:2565069, fixedPlr:1.22 },
 ];
 
 function renderAllocFromPortfolio() {
@@ -503,9 +503,8 @@ function renderAllocFromPortfolio() {
   });
 
   const rows = ALLOC_DEF.map(def => {
-    const plAmt  = plByKey[def.key]  || 0;
-    const buyAmt = buyByKey[def.key] || def.sheetEval;
-    const plr    = buyAmt > 0 ? plAmt / buyAmt * 100 : 0;
+    const plAmt  = def.fixedPl  !== undefined ? def.fixedPl  : (plByKey[def.key]  || 0);
+    const plr    = def.fixedPlr !== undefined ? def.fixedPlr : (buyAmt > 0 ? plAmt / buyAmt * 100 : 0);
     const count  = allData.filter(d => d.cat === def.key).length;
     return { ...def, plAmt, plr, count };
   });

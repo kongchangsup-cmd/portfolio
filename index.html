@@ -190,6 +190,10 @@
     <div class="loading">데이터를 불러오는 중...</div>
   </div>
   <div class="tab-bar">
+    <button class="tab-btn" id="tab-asset" onclick="switchTab('asset')">
+      <div class="tab-icon">⊞</div>
+      <div class="tab-label">자산현황</div>
+    </button>
     <button class="tab-btn on" id="tab-portfolio" onclick="switchTab('portfolio')">
       <div class="tab-icon">≡</div>
       <div class="tab-label">종목현황</div>
@@ -197,10 +201,6 @@
     <button class="tab-btn" id="tab-alloc" onclick="switchTab('alloc')">
       <div class="tab-icon">◎</div>
       <div class="tab-label">자산배분</div>
-    </button>
-    <button class="tab-btn" id="tab-asset" onclick="switchTab('asset')">
-      <div class="tab-icon">⊞</div>
-      <div class="tab-label">자산현황</div>
     </button>
   </div>
 </div>
@@ -222,6 +222,10 @@
     <div class="loading">데이터를 불러오는 중...</div>
   </div>
   <div class="tab-bar">
+    <button class="tab-btn" id="tab2-asset" onclick="switchTab('asset')">
+      <div class="tab-icon">⊞</div>
+      <div class="tab-label">자산현황</div>
+    </button>
     <button class="tab-btn" id="tab2-portfolio" onclick="switchTab('portfolio')">
       <div class="tab-icon">≡</div>
       <div class="tab-label">종목현황</div>
@@ -229,10 +233,6 @@
     <button class="tab-btn on" id="tab2-alloc" onclick="switchTab('alloc')">
       <div class="tab-icon">◎</div>
       <div class="tab-label">자산배분</div>
-    </button>
-    <button class="tab-btn" id="tab3-asset" onclick="switchTab('asset')">
-      <div class="tab-icon">⊞</div>
-      <div class="tab-label">자산현황</div>
     </button>
   </div>
 </div>
@@ -252,6 +252,10 @@
     <div class="loading">데이터를 불러오는 중...</div>
   </div>
   <div class="tab-bar">
+    <button class="tab-btn on" id="tab4-asset" onclick="switchTab('asset')">
+      <div class="tab-icon">⊞</div>
+      <div class="tab-label">자산현황</div>
+    </button>
     <button class="tab-btn" id="tab4-portfolio" onclick="switchTab('portfolio')">
       <div class="tab-icon">≡</div>
       <div class="tab-label">종목현황</div>
@@ -259,10 +263,6 @@
     <button class="tab-btn" id="tab4-alloc" onclick="switchTab('alloc')">
       <div class="tab-icon">◎</div>
       <div class="tab-label">자산배분</div>
-    </button>
-    <button class="tab-btn on" id="tab4-asset" onclick="switchTab('asset')">
-      <div class="tab-icon">⊞</div>
-      <div class="tab-label">자산현황</div>
     </button>
   </div>
 </div>
@@ -648,9 +648,9 @@ function switchTab(tab) {
     showScreen('asset-screen');
     renderAsset();
   }
-  ['tab-portfolio','tab-alloc','tab-asset',
-   'tab2-portfolio','tab2-alloc','tab3-asset',
-   'tab4-portfolio','tab4-alloc','tab4-asset'].forEach(id => {
+  ['tab-asset','tab-portfolio','tab-alloc',
+   'tab2-asset','tab2-portfolio','tab2-alloc',
+   'tab4-asset','tab4-portfolio','tab4-alloc'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const isActive = (tab === 'portfolio' && id.includes('portfolio')) ||
@@ -704,6 +704,7 @@ async function loadAssetData(key) {
   // 행 인덱스 (0-based): 행4=index3, 행5=index4 ...
   const r4  = rows[3]  || []; // CMA-1
   const r5  = rows[4]  || []; // CMA-2
+  const r6  = rows[5]  || []; // 위탁(일반계좌)
   const r7  = rows[6]  || []; // ISA
   const r8  = rows[7]  || []; // 연금저축1
   const r9  = rows[8]  || []; // 연금저축2
@@ -713,6 +714,12 @@ async function loadAssetData(key) {
   const r15 = rows[14] || []; // 예상수익
 
   const 계좌 = [
+    {
+      name: '일반계좌(위탁)', color: '#2e8b8b',
+      잔액: p(r6[1]),
+      원금: null, 누적수익: null, 누적수익율: null,
+      yr원금: p(r6[5]), yr수익: p(r6[6]), yr수익율: pPct(r6[7]),
+    },
     {
       name: 'ISA', color: '#1a6fc4',
       잔액: p(r7[1]),
@@ -742,7 +749,7 @@ async function loadAssetData(key) {
       yr원금: p(r11[5]),  yr수익: p(r11[6]),  yr수익율: pPct(r11[7]),
     },
     {
-      name: `기타(여행준비금)`, color: '#888',
+      name: '기타(여행준비금)', color: '#888',
       잔액: p(r4[1]) + p(r5[1]),
       원금: null, 누적수익: null, 누적수익율: null,
       yr원금: null, yr수익: null, yr수익율: null,
@@ -912,7 +919,8 @@ window.onload = () => {
   initCats();
   const savedKey = localStorage.getItem('invest_api_key');
   if (savedKey) {
-    showScreen('main-screen');
+    showScreen('asset-screen');
+    renderAsset();
     loadData(savedKey);
   } else {
     showScreen('setup-screen');

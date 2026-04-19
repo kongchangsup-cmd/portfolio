@@ -206,7 +206,8 @@ function getCategory(name) {
   if (/차이나|일본TOPIX|인도|유로|대만/.test(name)) return '기타주식';
   if (/금현물|구리|희토류|은액티브|WTI/.test(name)) return '원자재';
   if (/리츠|리얼티|인프라|글로벌인컴/.test(name)) return '리츠/자산';
-  if (/머니마켓|초단기채권|CD금리|SOFR/.test(name)) return '현금성';
+  if (/SOFR/.test(name)) return '미국채권';
+  if (/머니마켓|초단기채권|CD금리/.test(name)) return '현금성';
   if (/미국|나스닥|S&P|테슬라|엔비디아|구글|메디컬|양자/.test(name)) return '미국주식';
   return '한국주식';
 }

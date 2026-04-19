@@ -427,6 +427,19 @@ function renderCards() {
   }).join('');
 }
 
+// ── 자산배분 → 종목현황 카테고리 이동
+function goToCategory(cat) {
+  curCat = cat;
+  switchTab('portfolio');
+  document.querySelectorAll('.cat-btn').forEach(b =>
+    b.classList.toggle('on', b.textContent === cat)
+  );
+  renderSummary();
+  renderCards();
+  const activeBtn = document.querySelector('.cat-btn.on');
+  if (activeBtn) activeBtn.scrollIntoView({ inline: 'center', behavior: 'smooth' });
+}
+
 // ── 탭 전환
 function switchTab(tab) {
   if (tab === 'portfolio') {
@@ -519,12 +532,13 @@ function renderAllocFromPortfolio() {
       const barWidth = Math.min(r.progress / Math.max(r.progress, 100) * 100, 100);
       const targetBarPos = r.progress > 100 ? (100 / r.progress * 100) : 100;
       return `
-      <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:8px">
+      <div onclick="goToCategory('${r.key}')" style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);active:opacity(0.8)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div>
             <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
               <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
               <div style="font-size:14px;font-weight:600;color:var(--text)">${r.label}</div>
+              <div style="font-size:11px;color:var(--hint);margin-left:auto">›</div>
             </div>
             <div style="font-size:11px;color:var(--hint);padding-left:17px">
               매수 ${fmt(r.sheetBuy)}원

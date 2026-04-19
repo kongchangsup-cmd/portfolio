@@ -179,6 +179,7 @@
       <button class="toggle-btn" id="btn-pl2" onclick="setMode('pl2')">수익2 실현포함</button>
     </div>
     <select id="sort-select" onchange="renderCards()">
+      <option value="no">순번 순</option>
       <option value="eval">평가금 순</option>
       <option value="plr">수익률 순</option>
       <option value="prog">진행율 순</option>
@@ -417,6 +418,7 @@ function filtered() {
 function sorted(items) {
   const by = document.getElementById('sort-select').value;
   return [...items].sort((a, b) => {
+    if (by === 'no')   return a.no - b.no;
     if (by === 'eval') return b.eval - a.eval;
     if (by === 'plr') return (mode === 'pl1' ? b.plr1 - a.plr1 : b.plr2 - a.plr2);
     if (by === 'prog') return b.prog - a.prog;

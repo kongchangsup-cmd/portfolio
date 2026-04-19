@@ -872,14 +872,17 @@ async function renderAsset() {
         </div>
       </div>
       <div style="border-top:0.5px solid var(--border);padding-top:8px">
-        <div style="font-size:9px;color:var(--hint);margin-bottom:6px">${yr}년 자산증가 원천</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-size:9px;color:var(--hint)">${yr}년 자산증가 원천</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmt(자산.투자성과 + 자산.저축)}원</div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자성과 (I열)</div>
-            <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과)}">${fmt(자산.투자성과)}원</div>
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자성과</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.투자성과)}원</div>
           </div>
           <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축 (J열)</div>
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축</div>
             <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.저축)}원</div>
           </div>
         </div>

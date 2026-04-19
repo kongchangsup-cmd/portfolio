@@ -661,73 +661,119 @@ function switchTab(tab) {
 }
 
 
-// ── 자산현황 렌더링
-const ASSET_DATA = {
-  부동산:  820000000,
-  현금:    497561221,
-  금:       24795000,
-  총자산: 1342356221,
-  월사용:    3107854,
+// ── 자산현황 API 로딩
+// 자산이력 탭: 행번호 = 현재연도 - 2020 (2026→6행, 2027→7행...)
+// 현금자산 탭: 항상 고정 행 (계좌잔액은 실시간)
+
+const ACCOUNT_COLORS = {
+  'ISA': '#1a6fc4', '연금저축1': '#0f7a50',
+  '연금저축2': '#6a5acd', 'IRP': '#e8922a', '기타': '#888'
 };
 
-const ACCOUNT_DATA = [
-  {
-    name: 'ISA',
-    잔액: 78337448,
-    원금: 60000000,
-    누적수익: 18337448, 누적수익율: 30.56,
-    y26원금: 69794726, y26수익: 8542722, y26수익율: 12.24,
-    color: '#1a6fc4',
-  },
-  {
-    name: '연금저축1',
-    잔액: 59611458,
-    원금: 45000000,
-    누적수익: 14611458, 누적수익율: 32.47,
-    y26원금: 52536843, y26수익: 7074615, y26수익율: 13.47,
-    color: '#0f7a50',
-  },
-  {
-    name: '연금저축2',
-    잔액: 52088977,
-    원금: 36354500,
-    누적수익: 15734477, 누적수익율: 43.28,
-    y26원금: 44836504, y26수익: 7252473, y26수익율: 16.18,
-    color: '#6a5acd',
-  },
-  {
-    name: 'IRP',
-    잔액: 150814542,
-    원금: 128867810 + 9000000,
-    누적수익: 12946732, 누적수익율: 9.39,
-    y26원금: 142625543, y26수익: 8188999, y26수익율: 5.74,
-    color: '#e8922a',
-  },
-  {
-    name: '기타(여행준비금)',
-    잔액: 106096 + 17220257,
-    원금: null,
-    누적수익: null, 누적수익율: null,
-    y26원금: null, y26수익: null, y26수익율: null,
-    color: '#888',
-  },
-];
+async function loadAssetData(key) {
+  const cur년도 = new Date().getFullYear();
+  const 자산이력행 = cur년도 - 2020; // 2026→6, 2027→7...
+  const yr = String(cur년도).slice(2); // "26", "27"...
 
-const TOTAL_DATA = {
-  전체금액: 497561221,
-  y26원금: 461017726,
-  y26수익: 36543495,
-  y26수익율: 7.93,
-  년환산수익율: 26.79,
-  예상수익: 123503478,
-};
+  // 자산이력 탭: B~Q열, 해당 연도 행
+  const url1 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%EC%9E%90%EC%82%B0%EC%9D%B4%EB%A0%A5!A${자산이력행}:Q${자산이력행}?key=${key}`;
+  // 현금자산 탭: 전체 읽기
+  const url2 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%ED%98%84%EA%B8%88%EC%9E%90%EC%82%B0!A1:R20?key=${key}`;
 
-function renderAsset() {
-  const now = new Date();
-  document.getElementById('asset-time').textContent =
-    now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준 · 현금자산 탭';
+  const [r1, r2] = await Promise.all([fetch(url1), fetch(url2)]);
+  if (!r1.ok || !r2.ok) throw new Error('자산현황 데이터 로딩 실패');
 
-  const { 부동산, 현금, 금, 총자산, 월사용 } = ASSET_DATA;
+  const j1 = await r1.json();
+  const j2 = await r2.json();
+
+  const p = v => parseFloat(String(v||'0').replace(/[,%₩]/g,'')) || 0;
+  const pPct = v => { const n = parseFloat(String(v||'0').replace(/[,%₩]/g,'')); return Math.abs(n) < 2 ? n*100 : n; };
+
+  // 자산이력 행 파싱 (A=0, B=1, D=3, E=4, F=5, Q=16)
+  const ar = (j1.values||[[]])[0] || [];
+  const 자산 = {
+    부동산: p(ar[1]),
+    현금:   p(ar[3]),
+    금:     p(ar[4]),
+    총자산: p(ar[5]),
+    월사용: p(ar[16]),
+  };
+
+  // 현금자산 탭 파싱
+  const rows = j2.values || [];
+  // 행 인덱스 (0-based): 행4=index3, 행5=index4 ...
+  const r4  = rows[3]  || []; // CMA-1
+  const r5  = rows[4]  || []; // CMA-2
+  const r7  = rows[6]  || []; // ISA
+  const r8  = rows[7]  || []; // 연금저축1
+  const r9  = rows[8]  || []; // 연금저축2
+  const r11 = rows[10] || []; // IRP
+  const r12 = rows[11] || []; // 계
+  const r13 = rows[12] || []; // 투자수익
+  const r15 = rows[14] || []; // 예상수익
+
+  const 계좌 = [
+    {
+      name: 'ISA', color: '#1a6fc4',
+      잔액: p(r7[1]),
+      원금: p(r7[12]),
+      누적수익: p(r7[15]), 누적수익율: pPct(r7[16]),
+      yr원금: p(r7[5]),   yr수익: p(r7[6]),   yr수익율: pPct(r7[7]),
+    },
+    {
+      name: '연금저축1', color: '#0f7a50',
+      잔액: p(r8[1]),
+      원금: p(r8[12]),
+      누적수익: p(r8[15]), 누적수익율: pPct(r8[16]),
+      yr원금: p(r8[5]),   yr수익: p(r8[6]),   yr수익율: pPct(r8[7]),
+    },
+    {
+      name: '연금저축2', color: '#6a5acd',
+      잔액: p(r9[1]),
+      원금: p(r9[14]),
+      누적수익: p(r9[15]), 누적수익율: pPct(r9[16]),
+      yr원금: p(r9[5]),   yr수익: p(r9[6]),   yr수익율: pPct(r9[7]),
+    },
+    {
+      name: 'IRP', color: '#e8922a',
+      잔액: p(r11[1]),
+      원금: p(r11[13]) + p(r11[14]),
+      누적수익: p(r11[15]), 누적수익율: pPct(r11[16]),
+      yr원금: p(r11[5]),  yr수익: p(r11[6]),  yr수익율: pPct(r11[7]),
+    },
+    {
+      name: `기타(여행준비금)`, color: '#888',
+      잔액: p(r4[1]) + p(r5[1]),
+      원금: null, 누적수익: null, 누적수익율: null,
+      yr원금: null, yr수익: null, yr수익율: null,
+    },
+  ];
+
+  const 합계 = {
+    전체금액:    p(r12[1]),
+    yr원금:      p(r13[5]),
+    yr수익:      p(r13[6]),
+    yr수익율:    pPct(r13[7]),
+    년환산수익율: pPct(r13[8]),
+    예상수익:    p(r15[1]),
+  };
+
+  return { 자산, 계좌, 합계, yr, cur년도 };
+}
+
+async function renderAsset() {
+  const key = localStorage.getItem('invest_api_key');
+  if (!key) return;
+  document.getElementById('asset-body').innerHTML = '<div class="loading">불러오는 중...</div>';
+  try {
+    const { 자산, 계좌, 합계, yr, cur년도 } = await loadAssetData(key);
+    const now = new Date();
+    document.getElementById('asset-time').textContent =
+      now.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) +
+      ` 기준 · ${cur년도}년 자동`;
+
+  const { 부동산, 현금, 금, 총자산, 월사용 } = 자산;
+  const 자산이력행 = cur년도 - 2020;
   const 부동산비율 = (부동산 / 총자산 * 100).toFixed(1);
   const 현금비율   = (현금   / 총자산 * 100).toFixed(1);
   const 금비율     = (금     / 총자산 * 100).toFixed(1);
@@ -771,10 +817,8 @@ function renderAsset() {
     <!-- 투자 계좌별 현황 -->
     <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">투자 계좌별 현황</div>
 
-    ${ACCOUNT_DATA.map(ac => `
+    ${계좌.map(ac => `
     <div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid ${ac.color};border-radius:0 14px 14px 0;padding:13px 14px;margin-bottom:8px">
-
-      <!-- 계좌명 + 잔액 -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:7px">
           <div style="width:9px;height:9px;border-radius:50%;background:${ac.color};flex-shrink:0"></div>
@@ -785,9 +829,7 @@ function renderAsset() {
           <div style="font-size:10px;color:var(--hint);margin-top:1px">잔액</div>
         </div>
       </div>
-
       ${ac.원금 !== null ? `
-      <!-- 누적 수익 -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
         <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">납입원금</div>
@@ -802,22 +844,20 @@ function renderAsset() {
           <div style="font-size:11px;font-weight:600" class="${clr(ac.누적수익율)}">${fmtPct(ac.누적수익율)}</div>
         </div>
       </div>
-
-      <!-- 26년 수익 -->
       <div style="border-top:0.5px solid var(--border);padding-top:8px">
-        <div style="font-size:9px;color:var(--hint);margin-bottom:5px">2026년 성과</div>
+        <div style="font-size:9px;color:var(--hint);margin-bottom:5px">${cur년도}년 성과</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
           <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">26년 원금</div>
-            <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(ac.y26원금)}원</div>
+            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 원금</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(ac.yr원금)}원</div>
           </div>
           <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">26년 수익</div>
-            <div style="font-size:11px;font-weight:600" class="${clr(ac.y26수익)}">${fmt(ac.y26수익)}원</div>
+            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익</div>
+            <div style="font-size:11px;font-weight:600" class="${clr(ac.yr수익)}">${fmt(ac.yr수익)}원</div>
           </div>
           <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">26년 수익율</div>
-            <div style="font-size:11px;font-weight:600" class="${clr(ac.y26수익율)}">${fmtPct(ac.y26수익율)}</div>
+            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익율</div>
+            <div style="font-size:11px;font-weight:600" class="${clr(ac.yr수익율)}">${fmtPct(ac.yr수익율)}</div>
           </div>
         </div>
       </div>` : ''}
@@ -829,38 +869,43 @@ function renderAsset() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
           <div style="font-size:10px;color:var(--hint);margin-bottom:3px">전체 잔액</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(TOTAL_DATA.전체금액)}원</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(합계.전체금액)}원</div>
         </div>
         <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">26년 예상수익</div>
-          <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(TOTAL_DATA.예상수익)}원</div>
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 예상수익</div>
+          <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(합계.예상수익)}원</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px">
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">26년 원금</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(TOTAL_DATA.y26원금)}원</div>
+          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 원금</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(합계.yr원금)}원</div>
         </div>
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">26년 수익</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(TOTAL_DATA.y26수익)}">${fmt(TOTAL_DATA.y26수익)}원</div>
+          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익</div>
+          <div style="font-size:11px;font-weight:600" class="${clr(합계.yr수익)}">${fmt(합계.yr수익)}원</div>
         </div>
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">26년 수익율</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(TOTAL_DATA.y26수익율)}">${fmtPct(TOTAL_DATA.y26수익율)}</div>
+          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익율</div>
+          <div style="font-size:11px;font-weight:600" class="${clr(합계.yr수익율)}">${fmtPct(합계.yr수익율)}</div>
         </div>
         <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
           <div style="font-size:9px;color:var(--hint);margin-bottom:2px">년환산수익율</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(TOTAL_DATA.년환산수익율)}">${fmtPct(TOTAL_DATA.년환산수익율)}</div>
+          <div style="font-size:11px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
         </div>
       </div>
     </div>
 
     <!-- 기준 안내 -->
     <div style="background:var(--input-bg);border-radius:10px;padding:10px 13px;font-size:11px;color:var(--hint);line-height:1.8">
-      현금자산 탭 기준 · 자산이력 탭 2026년 기준
+      자동 연도 감지 · ${cur년도}년 → 자산이력 ${자산이력행}행 참조<br>
+      매년 1월 1일 자동으로 다음 행 데이터 반영
     </div>
   `;
+  } catch(e) {
+    document.getElementById('asset-body').innerHTML =
+      `<div class="error-box">⚠ ${e.message}</div>`;
+  }
 }
 
 window.onload = () => {

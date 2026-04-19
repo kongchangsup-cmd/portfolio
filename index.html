@@ -95,7 +95,12 @@
   .cat-btn.on { background: var(--input-bg); border-color: var(--sub); color: var(--text); font-weight: 600; }
 
   /* 종목 카드 */
-  .cards-wrap { padding: 0 14px 32px; }
+  .cards-wrap { padding: 0 14px 90px; }
+  .tab-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; display: flex; background: var(--card); border-top: 0.5px solid var(--border); z-index: 20; }
+  .tab-btn { flex: 1; padding: 10px 0 14px; background: none; border: none; cursor: pointer; color: var(--hint); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tab-btn.on { color: var(--blue); }
+  .tab-icon { font-size: 20px; line-height: 1; }
+  .tab-label { font-size: 10px; font-weight: 500; }
   .stock-card { background: var(--card); border: 0.5px solid var(--border); border-radius: 14px; padding: 12px 13px; margin-bottom: 7px; }
   .stock-card.trade { border-left: 3px solid var(--trade); border-radius: 0 14px 14px 0; }
   .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
@@ -184,6 +189,44 @@
   <div class="cards-wrap" id="cards-wrap">
     <div class="loading">데이터를 불러오는 중...</div>
   </div>
+  <div class="tab-bar">
+    <button class="tab-btn on" id="tab-portfolio" onclick="switchTab('portfolio')">
+      <div class="tab-icon">≡</div>
+      <div class="tab-label">종목현황</div>
+    </button>
+    <button class="tab-btn" id="tab-alloc" onclick="switchTab('alloc')">
+      <div class="tab-icon">◎</div>
+      <div class="tab-label">자산배분</div>
+    </button>
+  </div>
+</div>
+
+<!-- 자산배분 화면 -->
+<div class="screen" id="alloc-screen">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>자산배분 현황</h1>
+      <p id="alloc-time">불러오는 중...</p>
+    </div>
+    <div class="topbar-btns">
+      <button class="icon-btn" onclick="refreshAlloc()" id="alloc-refresh-btn">↻</button>
+      <button class="icon-btn" onclick="goSetup()">⚙</button>
+    </div>
+  </div>
+  <div class="summary-grid" id="alloc-summary"></div>
+  <div style="padding:0 14px 100px" id="alloc-body">
+    <div class="loading">데이터를 불러오는 중...</div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn" id="tab2-portfolio" onclick="switchTab('portfolio')">
+      <div class="tab-icon">≡</div>
+      <div class="tab-label">종목현황</div>
+    </button>
+    <button class="tab-btn on" id="tab2-alloc" onclick="switchTab('alloc')">
+      <div class="tab-icon">◎</div>
+      <div class="tab-label">자산배분</div>
+    </button>
+  </div>
 </div>
 
 <script>
@@ -265,6 +308,7 @@ async function loadData(key) {
       new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준 · 종목요약 탭';
     renderSummary();
     renderCards();
+    renderAllocFromPortfolio();
   } catch (e) {
     document.getElementById('error-area').innerHTML =
       `<div class="error-box">⚠ ${e.message}</div>`;
@@ -383,7 +427,170 @@ function renderCards() {
   }).join('');
 }
 
-// ── 초기화
+// ── 탭 전환
+function switchTab(tab) {
+  if (tab === 'portfolio') {
+    showScreen('main-screen');
+    document.getElementById('tab-portfolio').className = 'tab-btn on';
+    document.getElementById('tab-alloc').className = 'tab-btn';
+  } else {
+    showScreen('alloc-screen');
+    document.getElementById('tab2-portfolio').className = 'tab-btn';
+    document.getElementById('tab2-alloc').className = 'tab-btn on';
+    if (allocData.length === 0) refreshAlloc();
+  }
+}
+
+// ── 자산배분 데이터
+let allocData = [];
+const ALLOC_TAB = 'EFT 투자현황';
+
+async function refreshAlloc() {
+  const key = localStorage.getItem('invest_api_key');
+  if (!key) return;
+  document.getElementById('alloc-refresh-btn').textContent = '...';
+  try {
+    // 종목요약 탭의 EFT 투자현황 섹션을 파싱 (allData 기반으로 계산)
+    renderAllocFromPortfolio();
+    document.getElementById('alloc-time').textContent =
+      new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준';
+  } catch(e) {
+    document.getElementById('alloc-body').innerHTML = `<div class="error-box">⚠ ${e.message}</div>`;
+  } finally {
+    document.getElementById('alloc-refresh-btn').textContent = '↻';
+  }
+}
+
+// ── 자산배분 계산 (종목 데이터 기반)
+const ALLOC_DEF = [
+  { key: '미국주식', label: '주식 · 미국', target: 26.66, color: '#1a6fc4' },
+  { key: '한국주식', label: '주식 · 한국', target: 32.48, color: '#0f7a50' },
+  { key: '기타주식', label: '주식 · 기타', target: 9.38,  color: '#6a5acd' },
+  { key: '미국채권', label: '채권 · 미국', target: 4.53,  color: '#e8922a' },
+  { key: '한국채권', label: '채권 · 한국', target: 4.08,  color: '#c0392b' },
+  { key: '원자재',   label: '원자재',      target: 10.12, color: '#8b6914' },
+  { key: '리츠/자산',label: '리츠/자산',   target: 9.22,  color: '#2e8b8b' },
+  { key: '현금성',   label: '현금성',      target: 3.54,  color: '#888' },
+];
+
+function renderAllocFromPortfolio() {
+  if (allData.length === 0) {
+    document.getElementById('alloc-body').innerHTML = '<div class="empty">종목현황 데이터를 먼저 불러오세요</div>';
+    return;
+  }
+
+  const totalEval = allData.reduce((s, d) => s + d.eval, 0);
+  const totalBuy  = allData.reduce((s, d) => s + d.buy,  0);
+  const totalPl   = allData.reduce((s, d) => s + d.pl1,  0);
+
+  // 총계 요약
+  document.getElementById('alloc-summary').innerHTML = [
+    { label: '총 평가금액', val: fmt(totalEval) + '원', cls: '' },
+    { label: '총 매수금액', val: fmt(totalBuy) + '원',  cls: '' },
+    { label: '총 수익 (미실현)', val: fmt(totalPl) + '원', cls: clr(totalPl) },
+    { label: '총 수익률', val: fmtPct(totalBuy > 0 ? totalPl / totalBuy * 100 : 0), cls: clr(totalPl) },
+  ].map(c => `<div class="s-card"><div class="s-label">${c.label}</div><div class="s-value ${c.cls}">${c.val}</div></div>`).join('');
+
+  // 자산군별 계산
+  const rows = ALLOC_DEF.map(def => {
+    const items = allData.filter(d => d.cat === def.key);
+    const buyAmt  = items.reduce((s, d) => s + d.buy,  0);
+    const evalAmt = items.reduce((s, d) => s + d.eval, 0);
+    const plAmt   = items.reduce((s, d) => s + d.pl1,  0);
+    const evalPct = totalEval > 0 ? evalAmt / totalEval * 100 : 0;
+    const plr     = buyAmt > 0 ? plAmt / buyAmt * 100 : 0;
+    const progress = def.target > 0 ? Math.min(evalPct / def.target * 100, 200) : 0;
+    const diff    = evalPct - def.target;
+    return { ...def, buyAmt, evalAmt, plAmt, evalPct, plr, progress, diff, count: items.length };
+  });
+
+  allocData = rows;
+
+  document.getElementById('alloc-body').innerHTML = `
+    <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">자산군별 배분 현황</div>
+    ${rows.map(r => `
+    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${r.label}</div>
+            <div style="font-size:10px;color:var(--hint)">${r.count}종목</div>
+          </div>
+          <div style="font-size:11px;color:var(--hint);padding-left:17px">매수 ${fmt(r.buyAmt)}원</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:600;color:var(--text)">${fmt(r.evalAmt)}원</div>
+          <div style="font-size:11px;color:var(--hint);margin-top:1px">평가금액</div>
+        </div>
+      </div>
+
+      <!-- 목표 대비 진행율 바 -->
+      <div style="margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--hint);margin-bottom:3px">
+          <span>목표 <strong style="color:var(--text)">${r.target.toFixed(2)}%</strong></span>
+          <span>현재 <strong style="color:${r.diff >= 0 ? '#c0392b' : '#1a6fc4'}">${r.evalPct.toFixed(2)}%</strong>
+            <span style="color:${r.diff >= 0 ? '#c0392b' : '#1a6fc4'}">(${r.diff >= 0 ? '+' : ''}${r.diff.toFixed(2)}%)</span>
+          </span>
+        </div>
+        <div style="position:relative;height:6px;background:var(--bar-bg);border-radius:3px;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;height:100%;width:${Math.min(r.evalPct / Math.max(r.target, r.evalPct, 1) * 100, 100)}%;background:${r.color};border-radius:3px;opacity:0.85"></div>
+          ${r.target > 0 ? `<div style="position:absolute;top:0;height:100%;left:${Math.min(r.target / Math.max(r.target, r.evalPct, 1) * 100, 100)}%;width:2px;background:var(--text);opacity:0.3"></div>` : ''}
+        </div>
+      </div>
+
+      <!-- 수익 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="background:var(--input-bg);border-radius:8px;padding:7px 9px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:2px">수익금액</div>
+          <div style="font-size:12px;font-weight:600" class="${clr(r.plAmt)}">${fmt(r.plAmt)}원</div>
+        </div>
+        <div style="background:var(--input-bg);border-radius:8px;padding:7px 9px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:2px">수익률</div>
+          <div style="font-size:12px;font-weight:600" class="${clr(r.plr)}">${fmtPct(r.plr)}</div>
+        </div>
+      </div>
+    </div>`).join('')}
+
+    <!-- 비중 시각화 바 -->
+    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">포트폴리오 구성 비중</div>
+      <div style="display:flex;height:20px;border-radius:10px;overflow:hidden;margin-bottom:10px">
+        ${rows.filter(r => r.evalAmt > 0).map(r =>
+          `<div style="width:${r.evalPct.toFixed(1)}%;background:${r.color};opacity:0.85" title="${r.label} ${r.evalPct.toFixed(1)}%"></div>`
+        ).join('')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${rows.filter(r => r.evalAmt > 0).map(r =>
+          `<div style="display:flex;align-items:center;gap:4px">
+            <div style="width:8px;height:8px;border-radius:50%;background:${r.color}"></div>
+            <span style="font-size:11px;color:var(--sub)">${r.label.replace(' · ','/')}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text)">${r.evalPct.toFixed(1)}%</span>
+          </div>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ── 탭 전환
+function switchTab(tab) {
+  if (tab === 'portfolio') {
+    showScreen('main-screen');
+  } else {
+    showScreen('alloc-screen');
+    if (allocData.length === 0) refreshAlloc();
+  }
+  ['tab-portfolio','tab-alloc','tab2-portfolio','tab2-alloc'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isActive = (tab === 'portfolio' && id.includes('portfolio')) ||
+                     (tab === 'alloc' && id.includes('alloc'));
+    el.className = 'tab-btn' + (isActive ? ' on' : '');
+  });
+}
+
+
 window.onload = () => {
   initCats();
   const savedKey = localStorage.getItem('invest_api_key');

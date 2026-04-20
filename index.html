@@ -544,12 +544,7 @@ function renderAllocFromPortfolio() {
   const totalPl        = 37389971;
   const totalPr        = totalBuy > 0 ? totalPl / totalBuy * 100 : 0;
 
-  document.getElementById('alloc-summary').innerHTML = [
-    { label: '총 목표금액',   val: fmt(totalTargetAmt) + '원', cls: '' },
-    { label: '총 평가금액',   val: fmt(totalEval) + '원',      cls: '' },
-    { label: '총 수익',       val: fmt(totalPl) + '원',         cls: clr(totalPl) },
-    { label: '총 수익률',     val: fmtPct(totalPr),             cls: clr(totalPl) },
-  ].map(c => `<div class="s-card"><div class="s-label">${c.label}</div><div class="s-value ${c.cls}">${c.val}</div></div>`).join('');
+  document.getElementById('alloc-summary').innerHTML = '';
 
   // 자산군별 수익은 종목 데이터에서 계산
   const plByKey = {};
@@ -570,6 +565,28 @@ function renderAllocFromPortfolio() {
   allocData = rows;
 
   document.getElementById('alloc-body').innerHTML = `
+    <!-- 비중 시각화 바 (맨 앞) -->
+    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">평가금액 비중</div>
+      <div style="display:flex;height:20px;border-radius:10px;overflow:hidden;margin-bottom:10px">
+        ${rows.filter(r => r.sheetEval > 0).map(r => {
+          const pct = (r.sheetEval / totalEval * 100).toFixed(1);
+          return `<div style="width:${pct}%;background:${r.color};opacity:0.85"></div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${rows.filter(r => r.sheetEval > 0).map(r => {
+          const pct = (r.sheetEval / totalEval * 100).toFixed(1);
+          return `<div style="display:flex;align-items:center;gap:4px">
+            <div style="width:8px;height:8px;border-radius:50%;background:${r.color}"></div>
+            <span style="font-size:11px;color:var(--sub)">${r.label.replace(' · ','/')}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text)">${pct}%</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- 자산군별 배분 현황 -->
     <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">자산군별 배분 현황</div>
     ${rows.map(r => {
       const prog = Math.min(r.progress, 200);
@@ -620,26 +637,6 @@ function renderAllocFromPortfolio() {
       </div>`;
     }).join('')}
 
-    <!-- 비중 시각화 바 -->
-    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">평가금액 비중</div>
-      <div style="display:flex;height:20px;border-radius:10px;overflow:hidden;margin-bottom:10px">
-        ${rows.filter(r => r.sheetEval > 0).map(r => {
-          const pct = (r.sheetEval / totalEval * 100).toFixed(1);
-          return `<div style="width:${pct}%;background:${r.color};opacity:0.85"></div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${rows.filter(r => r.sheetEval > 0).map(r => {
-          const pct = (r.sheetEval / totalEval * 100).toFixed(1);
-          return `<div style="display:flex;align-items:center;gap:4px">
-            <div style="width:8px;height:8px;border-radius:50%;background:${r.color}"></div>
-            <span style="font-size:11px;color:var(--sub)">${r.label.replace(' · ','/')}</span>
-            <span style="font-size:11px;font-weight:600;color:var(--text)">${pct}%</span>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
   `;
 }
 

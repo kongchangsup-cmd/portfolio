@@ -834,57 +834,50 @@ async function renderAsset() {
         </div>`).join('')}
     </div>
 
-    <!-- 전체 합계 -->
+    <!-- 현금/투자 합계 -->
     <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">전체 합계</div>
+
+      <!-- 제목 + 현금/투자 금액 한 줄 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">현금/투자</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">${fmt(합계.전체금액)}원</div>
+      </div>
+
+      <!-- 1행: 26년 원금 | 현금증가액(I+J) -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">전체 잔액</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(합계.전체금액)}원</div>
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 원금 (전년말)</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(원금)}원</div>
+        </div>
+        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">현금증가액</div>
+          <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과 + 자산.저축)}">${fmt(자산.투자성과 + 자산.저축)}원</div>
+        </div>
+      </div>
+
+      <!-- 2행: 투자수익+수익율 | 급여저축+비율 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자수익</div>
+          <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과)}">${fmt(자산.투자성과)}원</div>
+          <div style="font-size:10px;margin-top:3px" class="${clr(자산.투자성과)}">${fmtPct(원금 > 0 ? 자산.투자성과 / 원금 * 100 : 0)}</div>
+        </div>
+        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.저축)}원</div>
+          <div style="font-size:10px;color:var(--sub);margin-top:3px">${fmtPct(원금 > 0 ? 자산.저축 / 원금 * 100 : 0)}</div>
+        </div>
+      </div>
+
+      <!-- 3행: 년환산수익율 | 26년 예상수익 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">년환산 수익율</div>
+          <div style="font-size:14px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
         </div>
         <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
           <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 예상수익</div>
           <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(합계.예상수익)}원</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 원금 (전년말 기준)</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(원금)}원</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 수익</div>
-          <div style="font-size:14px;font-weight:600" class="${clr(합계.yr수익)}">${fmt(합계.yr수익)}원</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익율</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(합계.yr수익율)}">${fmtPct(합계.yr수익율)}</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">년환산수익율</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:7px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 참조원금</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(합계.yr원금)}원</div>
-        </div>
-      </div>
-      <div style="border-top:0.5px solid var(--border);padding-top:8px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <div style="font-size:9px;color:var(--hint)">${yr}년 자산증가 원천</div>
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmt(자산.투자성과 + 자산.저축)}원</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자성과</div>
-            <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.투자성과)}원</div>
-          </div>
-          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축</div>
-            <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.저축)}원</div>
-          </div>
         </div>
       </div>
     </div>

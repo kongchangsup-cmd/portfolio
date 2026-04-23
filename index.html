@@ -271,9 +271,24 @@
 <script>
 const SHEET_ID = '1hC2y_8GiZ_Nz18Fe7XvC_Ve1D7urxpCQTYpGvBvJgGU';
 const SHEET_TAB = '종목요약';
+const ALLOC_TAB = '자산배분';   // ← 자산배분 탭명
 const CATS = ['전체','미국주식','한국주식','기타주식','미국채권','한국채권','원자재','리츠/자산','현금성'];
 
+// 자산배분 탭에서 읽을 행/열 정의
+// 행: 8~15 (0-based index: 7~14), 열: D=3, G=6, H=7, J=9, K=10, L=11, M=12
+const ALLOC_ROWS = [
+  { key:'미국주식', label:'주식 · 미국',  color:'#1a6fc4', row: 8 },
+  { key:'한국주식', label:'주식 · 한국',  color:'#0f7a50', row: 9 },
+  { key:'기타주식', label:'주식 · 기타',  color:'#6a5acd', row:10 },
+  { key:'미국채권', label:'채권 · 미국',  color:'#e8922a', row:11 },
+  { key:'한국채권', label:'채권 · 한국',  color:'#c0392b', row:12 },
+  { key:'원자재',   label:'원자재',       color:'#8b6914', row:13 },
+  { key:'리츠/자산',label:'리츠/자산',    color:'#2e8b8b', row:14 },
+  { key:'현금성',   label:'현금성',       color:'#888888', row:15 },
+];
+
 let allData = [];
+let allocData = [];
 let mode = 'pl1';
 let curCat = '전체';
 
@@ -348,7 +363,6 @@ async function loadData(key) {
       new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준 · 종목요약 탭';
     renderSummary();
     renderCards();
-    renderAllocFromPortfolio();
   } catch (e) {
     document.getElementById('error-area').innerHTML =
       `<div class="error-box">⚠ ${e.message}</div>`;
@@ -488,165 +502,9 @@ function goToCategory(cat) {
 function switchTab(tab) {
   if (tab === 'portfolio') {
     showScreen('main-screen');
-    document.getElementById('tab-portfolio').className = 'tab-btn on';
-    document.getElementById('tab-alloc').className = 'tab-btn';
-  } else {
-    showScreen('alloc-screen');
-    document.getElementById('tab2-portfolio').className = 'tab-btn';
-    document.getElementById('tab2-alloc').className = 'tab-btn on';
-    if (allocData.length === 0) refreshAlloc();
-  }
-}
-
-// ── 자산배분 데이터
-let allocData = [];
-const ALLOC_TAB = 'EFT 투자현황';
-
-async function refreshAlloc() {
-  const key = localStorage.getItem('invest_api_key');
-  if (!key) return;
-  document.getElementById('alloc-refresh-btn').textContent = '...';
-  try {
-    // 종목요약 탭의 EFT 투자현황 섹션을 파싱 (allData 기반으로 계산)
-    renderAllocFromPortfolio();
-    document.getElementById('alloc-time').textContent =
-      new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준';
-  } catch(e) {
-    document.getElementById('alloc-body').innerHTML = `<div class="error-box">⚠ ${e.message}</div>`;
-  } finally {
-    document.getElementById('alloc-refresh-btn').textContent = '↻';
-  }
-}
-
-// ── 자산배분 계산 (종목 데이터 기반)
-// 자산배분 탭 실제 값 (D열=목표금액, J열=평가금액, M열=진행율)
-const ALLOC_DEF = [
-  { key:'미국주식', label:'주식 · 미국', color:'#1a6fc4', targetPct:26.66, targetAmt:128021044, sheetEval:45283870,  sheetBuy:36025113,  progress:35.37 },
-  { key:'한국주식', label:'주식 · 한국', color:'#0f7a50', targetPct:32.48, targetAmt:155978945, sheetEval:69648535,  sheetBuy:51648445,  progress:44.65 },
-  { key:'기타주식', label:'주식 · 기타', color:'#6a5acd', targetPct:9.38,  targetAmt:45047560,  sheetEval:23197690,  sheetBuy:21597905,  progress:51.50 },
-  { key:'미국채권', label:'채권 · 미국', color:'#e8922a', targetPct:4.53,  targetAmt:21752713,  sheetEval:20468050,  sheetBuy:19466805,  progress:94.09 },
-  { key:'한국채권', label:'채권 · 한국', color:'#c0392b', targetPct:4.08,  targetAmt:19596224,  sheetEval:23132010,  sheetBuy:23332126,  progress:118.04 },
-  { key:'원자재',   label:'원자재',      color:'#8b6914', targetPct:10.12, targetAmt:48586201,  sheetEval:14577365,  sheetBuy:11306040,  progress:30.00 },
-  { key:'리츠/자산',label:'리츠/자산',   color:'#2e8b8b', targetPct:9.22,  targetAmt:44262999,  sheetEval:24369260,  sheetBuy:22475444,  progress:55.06 },
-  { key:'현금성',   label:'현금성',      color:'#888',    targetPct:3.54,  targetAmt:16989182,  sheetEval:213396305, sheetBuy:210831236, progress:1256.07, fixedPl:2565069, fixedPlr:1.22 },
-];
-
-function renderAllocFromPortfolio() {
-  if (allData.length === 0) {
-    document.getElementById('alloc-body').innerHTML = '<div class="empty">종목현황 데이터를 먼저 불러오세요</div>';
-    return;
-  }
-
-  // 총계: 자산배분 탭 계 행 기준
-  const totalTargetAmt = 480234868;
-  const totalEval      = 434073085;
-  const totalBuy       = 396683114;
-  const totalPl        = 37389971;
-  const totalPr        = totalBuy > 0 ? totalPl / totalBuy * 100 : 0;
-
-  document.getElementById('alloc-summary').innerHTML = '';
-
-  // 자산군별 수익은 종목 데이터에서 계산
-  const plByKey = {};
-  const buyByKey = {};
-  allData.forEach(d => {
-    plByKey[d.cat]  = (plByKey[d.cat]  || 0) + d.pl1;
-    buyByKey[d.cat] = (buyByKey[d.cat] || 0) + d.buy;
-  });
-
-  const rows = ALLOC_DEF.map(def => {
-    const plAmt  = def.fixedPl  !== undefined ? def.fixedPl  : (plByKey[def.key]  || 0);
-    const buyAmt = buyByKey[def.key] || def.sheetEval;
-    const plr    = def.fixedPlr !== undefined ? def.fixedPlr : (buyAmt > 0 ? plAmt / buyAmt * 100 : 0);
-    const count  = allData.filter(d => d.cat === def.key).length;
-    return { ...def, plAmt, plr, count };
-  });
-
-  allocData = rows;
-
-  document.getElementById('alloc-body').innerHTML = `
-    <!-- 비중 시각화 바 (맨 앞) -->
-    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">평가금액 비중</div>
-      <div style="display:flex;height:20px;border-radius:10px;overflow:hidden;margin-bottom:10px">
-        ${rows.filter(r => r.sheetEval > 0).map(r => {
-          const pct = (r.sheetEval / totalEval * 100).toFixed(1);
-          return `<div style="width:${pct}%;background:${r.color};opacity:0.85"></div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${rows.filter(r => r.sheetEval > 0).map(r => {
-          const pct = (r.sheetEval / totalEval * 100).toFixed(1);
-          return `<div style="display:flex;align-items:center;gap:4px">
-            <div style="width:8px;height:8px;border-radius:50%;background:${r.color}"></div>
-            <span style="font-size:11px;color:var(--sub)">${r.label.replace(' · ','/')}</span>
-            <span style="font-size:11px;font-weight:600;color:var(--text)">${pct}%</span>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-
-    <!-- 자산군별 배분 현황 -->
-    <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">자산군별 배분 현황</div>
-    ${rows.map(r => {
-      const prog = Math.min(r.progress, 200);
-      const barWidth = Math.min(r.progress / Math.max(r.progress, 100) * 100, 100);
-      const targetBarPos = r.progress > 100 ? (100 / r.progress * 100) : 100;
-      return `
-      <div onclick="goToCategory('${r.key}')" style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);active:opacity(0.8)">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-          <div>
-            <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
-              <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
-              <div style="font-size:14px;font-weight:600;color:var(--text)">${r.label}</div>
-              <div style="font-size:11px;color:var(--hint);margin-left:auto">›</div>
-            </div>
-            <div style="font-size:11px;color:var(--hint);padding-left:17px">
-              매수 ${fmt(r.sheetBuy)}원
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:15px;font-weight:600;color:var(--text)">${fmt(r.sheetEval)}원</div>
-            <div style="font-size:11px;color:var(--hint);margin-top:1px">현재 평가금액</div>
-          </div>
-        </div>
-
-        <!-- 진행율 바 -->
-        <div style="margin-bottom:9px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--hint);margin-bottom:3px">
-            <span>목표 <strong style="color:var(--text)">${fmt(r.targetAmt)}원</strong></span>
-            <span>진행율 <strong style="color:${r.progress >= 100 ? '#0f7a50' : '#1a6fc4'}">${r.progress.toFixed(2)}%</strong></span>
-          </div>
-          <div style="position:relative;height:6px;background:var(--bar-bg);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${barWidth}%;background:${r.color};border-radius:3px;opacity:0.85"></div>
-            ${r.progress < 100 ? `<div style="position:absolute;top:0;right:0;height:100%;width:${100-barWidth}%;background:var(--bar-bg);border-radius:0 3px 3px 0"></div>` : ''}
-          </div>
-        </div>
-
-        <!-- 수익 -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div style="background:var(--input-bg);border-radius:8px;padding:7px 9px">
-            <div style="font-size:10px;color:var(--hint);margin-bottom:2px">수익금액</div>
-            <div style="font-size:12px;font-weight:600" class="${clr(r.plAmt)}">${fmt(r.plAmt)}원</div>
-          </div>
-          <div style="background:var(--input-bg);border-radius:8px;padding:7px 9px">
-            <div style="font-size:10px;color:var(--hint);margin-bottom:2px">수익률</div>
-            <div style="font-size:12px;font-weight:600" class="${clr(r.plr)}">${fmtPct(r.plr)}</div>
-          </div>
-        </div>
-      </div>`;
-    }).join('')}
-
-  `;
-}
-
-// ── 탭 전환
-function switchTab(tab) {
-  if (tab === 'portfolio') {
-    showScreen('main-screen');
   } else if (tab === 'alloc') {
     showScreen('alloc-screen');
-    if (allocData.length === 0) refreshAlloc();
+    refreshAlloc();
   } else if (tab === 'asset') {
     showScreen('asset-screen');
     renderAsset();
@@ -663,11 +521,160 @@ function switchTab(tab) {
   });
 }
 
+// ────────────────────────────────────────────────
+// 자산배분 탭 실시간 로딩
+// 읽는 범위: D8:M15 (목표금액D, 매수금G, 비중H, 평가금J, 수익K, 수익율L, 진행율M)
+// ────────────────────────────────────────────────
+async function refreshAlloc() {
+  const key = localStorage.getItem('invest_api_key');
+  if (!key) return;
+
+  document.getElementById('alloc-refresh-btn').textContent = '...';
+  document.getElementById('alloc-body').innerHTML = '<div class="loading">자산배분 데이터를 불러오는 중...</div>';
+
+  try {
+    const tab = encodeURIComponent(ALLOC_TAB);
+    // D8:M15 → D~M 열(4~13), 8~15 행
+    const range = `${tab}!D8:M15`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?key=${key}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error?.message || `오류 ${res.status}`);
+    }
+    const json = await res.json();
+    const rows = json.values || [];
+
+    // D8:M15 범위에서 열 인덱스 (0-based within D~M)
+    // D=0, E=1, F=2, G=3, H=4, I=5, J=6, K=7, L=8, M=9
+    const COL = { D:0, G:3, H:4, J:6, K:7, L:8, M:9 };
+
+    const p = v => parseFloat(String(v || '0').replace(/[,%₩\s]/g, '')) || 0;
+
+    allocData = ALLOC_ROWS.map((def, i) => {
+      const row = rows[i] || [];
+      return {
+        ...def,
+        targetAmt: p(row[COL.D]),   // D열: 목표금액
+        sheetBuy:  p(row[COL.G]),   // G열: 매수금액
+        targetPct: p(row[COL.H]),   // H열: 목표비중(%)
+        sheetEval: p(row[COL.J]),   // J열: 평가금액
+        plAmt:     p(row[COL.K]),   // K열: 수익금액
+        plr:       p(row[COL.L]),   // L열: 수익률(%)
+        progress:  p(row[COL.M]),   // M열: 진행율(%)
+      };
+    });
+
+    // 총계 계산
+    const totalEval = allocData.reduce((s, r) => s + r.sheetEval, 0);
+    const totalBuy  = allocData.reduce((s, r) => s + r.sheetBuy,  0);
+    const totalPl   = allocData.reduce((s, r) => s + r.plAmt,     0);
+    const totalPr   = totalBuy > 0 ? (totalPl / totalBuy * 100) : 0;
+
+    document.getElementById('alloc-time').textContent =
+      new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) + ' 기준 · 자산배분 탭';
+
+    // 요약 4개 카드
+    document.getElementById('alloc-summary').innerHTML = [
+      { label:'총 평가금액',  val: fmt(totalEval) + '원', cls: '' },
+      { label:'총 매수금액',  val: fmt(totalBuy)  + '원', cls: '' },
+      { label:'수익금액',     val: fmt(totalPl)   + '원', cls: clr(totalPl) },
+      { label:'수익률',       val: fmtPct(totalPr),       cls: clr(totalPr) },
+    ].map(c => `<div class="s-card">
+      <div class="s-label">${c.label}</div>
+      <div class="s-value ${c.cls}">${c.val}</div>
+    </div>`).join('');
+
+    renderAllocBody(allocData, totalEval);
+
+  } catch (e) {
+    document.getElementById('alloc-body').innerHTML =
+      `<div class="error-box">⚠ ${e.message}</div>`;
+  } finally {
+    document.getElementById('alloc-refresh-btn').textContent = '↻';
+  }
+}
+
+// ── 자산배분 화면 렌더링
+function renderAllocBody(rows, totalEval) {
+  document.getElementById('alloc-body').innerHTML = `
+    <!-- 비중 시각화 바 -->
+    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">평가금액 비중</div>
+      <div style="display:flex;height:20px;border-radius:10px;overflow:hidden;margin-bottom:10px">
+        ${rows.filter(r => r.sheetEval > 0).map(r => {
+          const pct = totalEval > 0 ? (r.sheetEval / totalEval * 100).toFixed(1) : 0;
+          return `<div style="width:${pct}%;background:${r.color};opacity:0.85" title="${r.label} ${pct}%"></div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${rows.filter(r => r.sheetEval > 0).map(r => {
+          const pct = totalEval > 0 ? (r.sheetEval / totalEval * 100).toFixed(1) : 0;
+          return `<div style="display:flex;align-items:center;gap:4px">
+            <div style="width:8px;height:8px;border-radius:50%;background:${r.color}"></div>
+            <span style="font-size:11px;color:var(--sub)">${r.label.replace(' · ','/')}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text)">${pct}%</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- 자산군별 배분 현황 -->
+    <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">자산군별 배분 현황</div>
+
+    ${rows.map(r => {
+      const barWidth = Math.min(r.progress, 200) / Math.max(r.progress, 100) * 100;
+      const cappedBar = Math.min(barWidth, 100);
+      return `
+      <div onclick="goToCategory('${r.key}')"
+           style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:8px;cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div>
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+              <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">${r.label}</div>
+              <div style="font-size:11px;color:var(--hint);margin-left:2px">›</div>
+            </div>
+            <div style="font-size:11px;color:var(--hint);padding-left:17px">
+              목표비중 <strong style="color:var(--text)">${r.targetPct.toFixed(2)}%</strong>
+              &nbsp;·&nbsp; 매수 ${fmt(r.sheetBuy)}원
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:15px;font-weight:600;color:var(--text)">${fmt(r.sheetEval)}원</div>
+            <div style="font-size:11px;color:var(--hint);margin-top:1px">현재 평가금액</div>
+          </div>
+        </div>
+
+        <!-- 진행율 바 -->
+        <div style="margin-bottom:9px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--hint);margin-bottom:3px">
+            <span>목표 <strong style="color:var(--text)">${fmt(r.targetAmt)}원</strong></span>
+            <span>진행율 <strong style="color:${r.progress >= 100 ? '#0f7a50' : '#1a6fc4'}">${r.progress.toFixed(2)}%</strong></span>
+          </div>
+          <div style="position:relative;height:6px;background:var(--bar-bg);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${cappedBar}%;background:${r.color};border-radius:3px;opacity:0.85"></div>
+          </div>
+        </div>
+
+        <!-- 수익 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:var(--input-bg);border-radius:8px;padding:7px 9px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:2px">수익금액</div>
+            <div style="font-size:12px;font-weight:600" class="${clr(r.plAmt)}">${fmt(r.plAmt)}원</div>
+          </div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:7px 9px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:2px">수익률</div>
+            <div style="font-size:12px;font-weight:600" class="${clr(r.plr)}">${fmtPct(r.plr)}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
 
 // ── 자산현황 API 로딩
-// 자산이력 탭: 행번호 = 현재연도 - 2020 (2026→6행, 2027→7행...)
-// 현금자산 탭: 항상 고정 행 (계좌잔액은 실시간)
-
 const ACCOUNT_COLORS = {
   'ISA': '#1a6fc4', '연금저축1': '#0f7a50',
   '연금저축2': '#6a5acd', 'IRP': '#e8922a', '기타': '#888'
@@ -675,13 +682,11 @@ const ACCOUNT_COLORS = {
 
 async function loadAssetData(key) {
   const cur년도 = new Date().getFullYear();
-  const 자산이력행 = cur년도 - 2020;     // 2026→6, 2027→7...
-  const 전년도행   = 자산이력행 - 1;     // 2026→5, 2027→6... (전년말 현금 = 올해 원금)
-  const yr = String(cur년도).slice(2);   // "26", "27"...
+  const 자산이력행 = cur년도 - 2020;
+  const 전년도행   = 자산이력행 - 1;
+  const yr = String(cur년도).slice(2);
 
-  // 자산이력: 전년도행~현재행 두 행을 한번에 읽기
   const url1 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%EC%9E%90%EC%82%B0%EC%9D%B4%EB%A0%A5!A${전년도행}:Q${자산이력행}?key=${key}`;
-  // 현금자산 탭: 전체 읽기
   const url2 = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/%ED%98%84%EA%B8%88%EC%9E%90%EC%82%B0!A1:R20?key=${key}`;
 
   const [r1, r2] = await Promise.all([fetch(url1), fetch(url2)]);
@@ -693,11 +698,9 @@ async function loadAssetData(key) {
   const p = v => parseFloat(String(v||'0').replace(/[,%₩]/g,'')) || 0;
   const pPct = v => { const n = parseFloat(String(v||'0').replace(/[,%₩]/g,'')); return Math.abs(n) < 2 ? n*100 : n; };
 
-  // 두 행 중 첫 행=전년도, 두 번째 행=현재연도
-  const prev_ar = (j1.values||[[]])[0] || []; // 전년도 행 (원금 기준)
-  const ar      = (j1.values||[[]])[1] || []; // 현재연도 행
+  const prev_ar = (j1.values||[[]])[0] || [];
+  const ar      = (j1.values||[[]])[1] || [];
 
-  // 자산이력 파싱 (A=0, B=1, D=3, E=4, F=5, I=8, J=9, Q=16)
   const 자산 = {
     부동산:   p(ar[1]),
     현금:     p(ar[3]),
@@ -706,73 +709,37 @@ async function loadAssetData(key) {
     투자성과: p(ar[8]),
     저축:     p(ar[9]),
     월사용:   p(ar[16]),
-    원금:     p(prev_ar[3]), // 전년도말 D열 현금 = 올해 원금
+    원금:     p(prev_ar[3]),
   };
 
-  // 현금자산 탭 파싱
   const rows = j2.values || [];
-  // 행 인덱스 (0-based): 행4=index3, 행5=index4 ...
-  const r4  = rows[3]  || []; // CMA-1
-  const r5  = rows[4]  || []; // CMA-2
-  const r6  = rows[5]  || []; // 위탁(일반계좌)
-  const r7  = rows[6]  || []; // ISA
-  const r8  = rows[7]  || []; // 연금저축1
-  const r9  = rows[8]  || []; // 연금저축2
-  const r11 = rows[10] || []; // IRP
-  const r12 = rows[11] || []; // 계
-  const r13 = rows[12] || []; // 투자수익
-  const r15 = rows[14] || []; // 예상수익
+  const r4  = rows[3]  || [];
+  const r5  = rows[4]  || [];
+  const r6  = rows[5]  || [];
+  const r7  = rows[6]  || [];
+  const r8  = rows[7]  || [];
+  const r9  = rows[8]  || [];
+  const r11 = rows[10] || [];
+  const r12 = rows[11] || [];
+  const r13 = rows[12] || [];
+  const r15 = rows[14] || [];
 
   const 계좌 = [
-    {
-      name: '일반계좌(위탁)', color: '#2e8b8b',
-      잔액: p(r6[1]),
-      원금: null, 누적수익: null, 누적수익율: null,
-      yr원금: p(r6[5]), yr수익: p(r6[6]), yr수익율: pPct(r6[7]),
-    },
-    {
-      name: 'ISA', color: '#1a6fc4',
-      잔액: p(r7[1]),
-      원금: p(r7[12]),
-      누적수익: p(r7[15]), 누적수익율: pPct(r7[16]),
-      yr원금: p(r7[5]),   yr수익: p(r7[6]),   yr수익율: pPct(r7[7]),
-    },
-    {
-      name: '연금저축1', color: '#0f7a50',
-      잔액: p(r8[1]),
-      원금: p(r8[12]),
-      누적수익: p(r8[15]), 누적수익율: pPct(r8[16]),
-      yr원금: p(r8[5]),   yr수익: p(r8[6]),   yr수익율: pPct(r8[7]),
-    },
-    {
-      name: '연금저축2', color: '#6a5acd',
-      잔액: p(r9[1]),
-      원금: p(r9[14]),
-      누적수익: p(r9[15]), 누적수익율: pPct(r9[16]),
-      yr원금: p(r9[5]),   yr수익: p(r9[6]),   yr수익율: pPct(r9[7]),
-    },
-    {
-      name: 'IRP', color: '#e8922a',
-      잔액: p(r11[1]),
-      원금: p(r11[13]) + p(r11[14]),
-      누적수익: p(r11[15]), 누적수익율: pPct(r11[16]),
-      yr원금: p(r11[5]),  yr수익: p(r11[6]),  yr수익율: pPct(r11[7]),
-    },
-    {
-      name: '기타(여행준비금)', color: '#888',
-      잔액: p(r4[1]) + p(r5[1]),
-      원금: null, 누적수익: null, 누적수익율: null,
-      yr원금: null, yr수익: null, yr수익율: null,
-    },
+    { name:'일반계좌(위탁)', color:'#2e8b8b', 잔액:p(r6[1]), 원금:null, 누적수익:null, 누적수익율:null, yr원금:p(r6[5]), yr수익:p(r6[6]), yr수익율:pPct(r6[7]) },
+    { name:'ISA',      color:'#1a6fc4', 잔액:p(r7[1]),  원금:p(r7[12]),            누적수익:p(r7[15]),  누적수익율:pPct(r7[16]),  yr원금:p(r7[5]),  yr수익:p(r7[6]),  yr수익율:pPct(r7[7]) },
+    { name:'연금저축1', color:'#0f7a50', 잔액:p(r8[1]),  원금:p(r8[12]),            누적수익:p(r8[15]),  누적수익율:pPct(r8[16]),  yr원금:p(r8[5]),  yr수익:p(r8[6]),  yr수익율:pPct(r8[7]) },
+    { name:'연금저축2', color:'#6a5acd', 잔액:p(r9[1]),  원금:p(r9[14]),            누적수익:p(r9[15]),  누적수익율:pPct(r9[16]),  yr원금:p(r9[5]),  yr수익:p(r9[6]),  yr수익율:pPct(r9[7]) },
+    { name:'IRP',      color:'#e8922a', 잔액:p(r11[1]), 원금:p(r11[13])+p(r11[14]),누적수익:p(r11[15]), 누적수익율:pPct(r11[16]), yr원금:p(r11[5]), yr수익:p(r11[6]), yr수익율:pPct(r11[7]) },
+    { name:'기타(여행준비금)', color:'#888', 잔액:p(r4[1])+p(r5[1]), 원금:null, 누적수익:null, 누적수익율:null, yr원금:null, yr수익:null, yr수익율:null },
   ];
 
   const 합계 = {
-    전체금액:    p(r12[1]),
-    yr원금:      p(r13[5]),
-    yr수익:      p(r13[6]),
-    yr수익율:    pPct(r13[7]),
-    년환산수익율: pPct(r13[8]),
-    예상수익:    p(r15[1]),
+    전체금액:     p(r12[1]),
+    yr원금:       p(r13[5]),
+    yr수익:       p(r13[6]),
+    yr수익율:     pPct(r13[7]),
+    년환산수익율:  pPct(r13[8]),
+    예상수익:     p(r15[1]),
   };
 
   return { 자산, 계좌, 합계, yr, cur년도 };
@@ -789,152 +756,142 @@ async function renderAsset() {
       now.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) +
       ` 기준 · ${cur년도}년 자동`;
 
-  const { 부동산, 현금, 금, 총자산, 투자성과, 저축, 월사용, 원금 } = 자산;
-  const 자산이력행 = cur년도 - 2020;
-  const 부동산비율 = (부동산 / 총자산 * 100).toFixed(1);
-  const 현금비율   = (현금   / 총자산 * 100).toFixed(1);
-  const 금비율     = (금     / 총자산 * 100).toFixed(1);
-  const 년사용     = 월사용 * 12;
+    const { 부동산, 현금, 금, 총자산, 투자성과, 저축, 월사용, 원금 } = 자산;
+    const 자산이력행 = cur년도 - 2020;
+    const 부동산비율 = (부동산 / 총자산 * 100).toFixed(1);
+    const 현금비율   = (현금   / 총자산 * 100).toFixed(1);
+    const 금비율     = (금     / 총자산 * 100).toFixed(1);
+    const 년사용     = 월사용 * 12;
 
-  document.getElementById('asset-body').innerHTML = `
-
-    <!-- 총자산 히어로 -->
-    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:18px 16px;margin-bottom:12px;text-align:center">
-      <div style="font-size:11px;color:var(--hint);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">총 자산</div>
-      <div style="font-size:28px;font-weight:700;color:var(--text);letter-spacing:-1px">${fmt(총자산)}<span style="font-size:16px;font-weight:400;color:var(--hint)">원</span></div>
-      <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0 8px">
-        <div style="width:${부동산비율}%;background:#1a6fc4"></div>
-        <div style="width:${현금비율}%;background:#0f7a50"></div>
-        <div style="width:${금비율}%;background:#8b6914"></div>
+    document.getElementById('asset-body').innerHTML = `
+      <!-- 총자산 히어로 -->
+      <div style="background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:18px 16px;margin-bottom:12px;text-align:center">
+        <div style="font-size:11px;color:var(--hint);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">총 자산</div>
+        <div style="font-size:28px;font-weight:700;color:var(--text);letter-spacing:-1px">${fmt(총자산)}<span style="font-size:16px;font-weight:400;color:var(--hint)">원</span></div>
+        <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0 8px">
+          <div style="width:${부동산비율}%;background:#1a6fc4"></div>
+          <div style="width:${현금비율}%;background:#0f7a50"></div>
+          <div style="width:${금비율}%;background:#8b6914"></div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap">
+          ${[['부동산',부동산비율,'#1a6fc4'],['현금/투자',현금비율,'#0f7a50'],['금',금비율,'#8b6914']].map(([n,p,c])=>
+            `<div style="display:flex;align-items:center;gap:4px">
+              <div style="width:8px;height:8px;border-radius:50%;background:${c}"></div>
+              <span style="font-size:11px;color:var(--sub)">${n} ${p}%</span>
+            </div>`).join('')}
+        </div>
       </div>
-      <div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap">
-        ${[['부동산',부동산비율,'#1a6fc4'],['현금/투자',현금비율,'#0f7a50'],['금',금비율,'#8b6914']].map(([n,p,c])=>
-          `<div style="display:flex;align-items:center;gap:4px">
-            <div style="width:8px;height:8px;border-radius:50%;background:${c}"></div>
-            <span style="font-size:11px;color:var(--sub)">${n} ${p}%</span>
+
+      <!-- 자산 항목별 카드 2열 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        ${[
+          { label:'부동산',     val: 부동산, color:'#1a6fc4', sub:`전체의 ${부동산비율}%` },
+          { label:'현금/투자',  val: 현금,   color:'#0f7a50', sub:`전체의 ${현금비율}%` },
+          { label:'금',         val: 금,     color:'#8b6914', sub:`전체의 ${금비율}%` },
+          { label:'은퇴 후 월 사용가능', val: 월사용, color:'#c0392b', sub:`연 ${fmt(년사용)}원 (부동산 0.5배 축소 · 4% 룰)` },
+        ].map(item => `
+          <div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid ${item.color};border-radius:0 12px 12px 0;padding:12px 13px">
+            <div style="font-size:11px;color:var(--hint);margin-bottom:4px">${item.label}</div>
+            <div style="font-size:15px;font-weight:600;color:${item.label==='은퇴 후 월 사용가능'?item.color:'var(--text)'};">${fmt(item.val)}원</div>
+            <div style="font-size:10px;color:var(--hint);margin-top:3px">${item.sub}</div>
           </div>`).join('')}
       </div>
-    </div>
 
-    <!-- 자산 항목별 카드 2열 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-      ${[
-        { label:'부동산',     val: 부동산, color:'#1a6fc4', sub:`전체의 ${부동산비율}%` },
-        { label:'현금/투자',  val: 현금,   color:'#0f7a50', sub:`전체의 ${현금비율}%` },
-        { label:'금',         val: 금,     color:'#8b6914', sub:`전체의 ${금비율}%` },
-        { label:'은퇴 후 월 사용가능', val: 월사용, color:'#c0392b', sub:`연 ${fmt(년사용)}원 (부동산 0.5배 축소 · 4% 룰)` },
-      ].map(item => `
-        <div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid ${item.color};border-radius:0 12px 12px 0;padding:12px 13px">
-          <div style="font-size:11px;color:var(--hint);margin-bottom:4px">${item.label}</div>
-          <div style="font-size:15px;font-weight:600;color:${item.label==='은퇴 후 월 사용가능'?item.color:'var(--text)'};">${fmt(item.val)}원</div>
-          <div style="font-size:10px;color:var(--hint);margin-top:3px">${item.sub}</div>
-        </div>`).join('')}
-    </div>
-
-    <!-- 현금/투자 합계 -->
-    <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
-
-      <!-- 제목 + 현금/투자 금액 한 줄 -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:600;color:var(--text)">현금/투자</div>
-        <div style="font-size:16px;font-weight:700;color:var(--text)">${fmt(합계.전체금액)}원</div>
-      </div>
-
-      <!-- 1행: 26년 원금 | 현금증가액(I+J) -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 원금 (전년말)</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(원금)}원</div>
+      <!-- 현금/투자 합계 -->
+      <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">현금/투자</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${fmt(합계.전체금액)}원</div>
         </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">현금증가액</div>
-          <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과 + 자산.저축)}">${fmt(자산.투자성과 + 자산.저축)}원</div>
-        </div>
-      </div>
-
-      <!-- 2행: 투자수익+수익율 | 급여저축+비율 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자수익</div>
-          <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과)}">${fmt(자산.투자성과)}원</div>
-          <div style="font-size:10px;margin-top:3px" class="${clr(자산.투자성과)}">${fmtPct(원금 > 0 ? 자산.투자성과 / 원금 * 100 : 0)}</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.저축)}원</div>
-          <div style="font-size:10px;color:var(--sub);margin-top:3px">${fmtPct(원금 > 0 ? 자산.저축 / 원금 * 100 : 0)}</div>
-        </div>
-      </div>
-
-      <!-- 3행: 년환산수익율 | 26년 예상수익 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">년환산 수익율</div>
-          <div style="font-size:14px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
-          <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 예상수익</div>
-          <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(합계.예상수익)}원</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 투자 계좌별 현황 -->
-    <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">투자 계좌별 현황</div>
-
-    ${계좌.map(ac => `
-    <div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid ${ac.color};border-radius:0 14px 14px 0;padding:13px 14px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:7px">
-          <div style="width:9px;height:9px;border-radius:50%;background:${ac.color};flex-shrink:0"></div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${ac.name}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:15px;font-weight:600;color:var(--text)">${fmt(ac.잔액)}원</div>
-          <div style="font-size:10px;color:var(--hint);margin-top:1px">잔액</div>
-        </div>
-      </div>
-      ${ac.원금 !== null ? `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
-        <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">납입원금</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(ac.원금)}원</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">누적수익</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(ac.누적수익)}">${fmt(ac.누적수익)}원</div>
-        </div>
-        <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-          <div style="font-size:9px;color:var(--hint);margin-bottom:2px">누적수익율</div>
-          <div style="font-size:11px;font-weight:600" class="${clr(ac.누적수익율)}">${fmtPct(ac.누적수익율)}</div>
-        </div>
-      </div>` : ''}
-      ${ac.yr원금 !== null ? `
-      <div style="${ac.원금 !== null ? 'border-top:0.5px solid var(--border);padding-top:8px' : ''}">
-        <div style="font-size:9px;color:var(--hint);margin-bottom:5px">${cur년도}년 성과</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
-          <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 원금</div>
-            <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(ac.yr원금)}원</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 원금 (전년말)</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(원금)}원</div>
           </div>
-          <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익</div>
-            <div style="font-size:11px;font-weight:600" class="${clr(ac.yr수익)}">${fmt(ac.yr수익)}원</div>
-          </div>
-          <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
-            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익율</div>
-            <div style="font-size:11px;font-weight:600" class="${clr(ac.yr수익율)}">${fmtPct(ac.yr수익율)}</div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">현금증가액</div>
+            <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과 + 자산.저축)}">${fmt(자산.투자성과 + 자산.저축)}원</div>
           </div>
         </div>
-      </div>` : ''}
-    </div>`).join('')}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">투자수익</div>
+            <div style="font-size:14px;font-weight:600" class="${clr(자산.투자성과)}">${fmt(자산.투자성과)}원</div>
+            <div style="font-size:10px;margin-top:3px" class="${clr(자산.투자성과)}">${fmtPct(원금 > 0 ? 자산.투자성과 / 원금 * 100 : 0)}</div>
+          </div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">급여 저축</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${fmt(자산.저축)}원</div>
+            <div style="font-size:10px;color:var(--sub);margin-top:3px">${fmtPct(원금 > 0 ? 자산.저축 / 원금 * 100 : 0)}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">년환산 수익율</div>
+            <div style="font-size:14px;font-weight:600" class="${clr(합계.년환산수익율)}">${fmtPct(합계.년환산수익율)}</div>
+          </div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:9px 11px">
+            <div style="font-size:10px;color:var(--hint);margin-bottom:3px">${yr}년 예상수익</div>
+            <div style="font-size:14px;font-weight:600;color:var(--pos)">${fmt(합계.예상수익)}원</div>
+          </div>
+        </div>
+      </div>
 
-    <!-- 기준 안내 -->
-    <div style="background:var(--input-bg);border-radius:10px;padding:10px 13px;font-size:11px;color:var(--hint);line-height:1.8">
-      자동 연도 감지 · ${cur년도}년 → 자산이력 ${자산이력행}행 참조<br>
-      매년 1월 1일 자동으로 다음 행 데이터 반영
-    </div>
-  `;
+      <!-- 투자 계좌별 현황 -->
+      <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">투자 계좌별 현황</div>
+      ${계좌.map(ac => `
+      <div style="background:var(--card);border:0.5px solid var(--border);border-left:3px solid ${ac.color};border-radius:0 14px 14px 0;padding:13px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:7px">
+            <div style="width:9px;height:9px;border-radius:50%;background:${ac.color};flex-shrink:0"></div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${ac.name}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:15px;font-weight:600;color:var(--text)">${fmt(ac.잔액)}원</div>
+            <div style="font-size:10px;color:var(--hint);margin-top:1px">잔액</div>
+          </div>
+        </div>
+        ${ac.원금 !== null ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
+          <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">납입원금</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(ac.원금)}원</div>
+          </div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">누적수익</div>
+            <div style="font-size:11px;font-weight:600" class="${clr(ac.누적수익)}">${fmt(ac.누적수익)}원</div>
+          </div>
+          <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
+            <div style="font-size:9px;color:var(--hint);margin-bottom:2px">누적수익율</div>
+            <div style="font-size:11px;font-weight:600" class="${clr(ac.누적수익율)}">${fmtPct(ac.누적수익율)}</div>
+          </div>
+        </div>` : ''}
+        ${ac.yr원금 !== null ? `
+        <div style="${ac.원금 !== null ? 'border-top:0.5px solid var(--border);padding-top:8px' : ''}">
+          <div style="font-size:9px;color:var(--hint);margin-bottom:5px">${cur년도}년 성과</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+            <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
+              <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 원금</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text)">${fmt(ac.yr원금)}원</div>
+            </div>
+            <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
+              <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익</div>
+              <div style="font-size:11px;font-weight:600" class="${clr(ac.yr수익)}">${fmt(ac.yr수익)}원</div>
+            </div>
+            <div style="background:var(--input-bg);border-radius:8px;padding:6px 8px">
+              <div style="font-size:9px;color:var(--hint);margin-bottom:2px">${yr}년 수익율</div>
+              <div style="font-size:11px;font-weight:600" class="${clr(ac.yr수익율)}">${fmtPct(ac.yr수익율)}</div>
+            </div>
+          </div>
+        </div>` : ''}
+      </div>`).join('')}
+
+      <!-- 기준 안내 -->
+      <div style="background:var(--input-bg);border-radius:10px;padding:10px 13px;font-size:11px;color:var(--hint);line-height:1.8">
+        자동 연도 감지 · ${cur년도}년 → 자산이력 ${자산이력행}행 참조<br>
+        매년 1월 1일 자동으로 다음 행 데이터 반영
+      </div>
+    `;
   } catch(e) {
     document.getElementById('asset-body').innerHTML =
       `<div class="error-box">⚠ ${e.message}</div>`;

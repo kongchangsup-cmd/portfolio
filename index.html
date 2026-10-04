@@ -175,8 +175,8 @@
 
   <div class="ctrl-row">
     <div class="toggle-group">
-      <button class="toggle-btn on" id="btn-pl1" onclick="setMode('pl1')">수익1 미실현</button>
-      <button class="toggle-btn" id="btn-pl2" onclick="setMode('pl2')">수익2 실현포함</button>
+      <button class="toggle-btn on" id="btn-pl1" onclick="setMode('pl1')">평가손익</button>
+      <button class="toggle-btn" id="btn-pl2" onclick="setMode('pl2')">총수익</button>
     </div>
     <select id="sort-select" onchange="renderCards()">
       <option value="no">순번 순</option>
@@ -312,29 +312,69 @@ function getCategory(name) {
 function parseRows(values) {
   const items = [];
   let no = 0;
+
   for (const row of values) {
-    const name = (row[1] || '').trim();
-    if (!name || /매매|순번|종목명|EFT|NO/.test(name)) continue;
-    const p = v => parseFloat(String(v || '0').replace(/[,%₩]/g, '')) || 0;
-    const evalAmt = p(row[7]);
-    if (evalAmt < 1000) continue;
+    const name = String(row[1] || '').trim();
+
+    if (!name || /매매|순번|종목명|EFT|ETF|NO/i.test(name)) continue;
+
+    const p = v =>
+      parseFloat(String(v ?? '0').replace(/[,%₩\s]/g, '')) || 0;
+
+    // ─────────────────────────────────────
+    // 종목요약 탭 A:K
+    //
+    // A : 순번
+    // B : 종목명
+    // C : 목표금액
+    // D : 매수금액
+    // E : 평가금액
+    // F : 수익1 = 평가손익
+    // G : 수익율1 = 평가수익률
+    // H : 분배금
+    // I : 분배수익율
+    // J : 총수익
+    // K : 총수익율
+    // ─────────────────────────────────────
+
+    const target = p(row[2]);
+    const buy = p(row[3]);
+    const evalAmt = p(row[4]);
+
+    // 실제 투자금액이 없는 행은 제외
+    if (evalAmt < 1000 && buy < 1000) continue;
+
     no++;
+
     items.push({
-      no, name,
-      trade: parseInt(row[2]) || 0,
-      price: p(row[3]),
-      target: p(row[4]),
-      buy: p(row[5]),
-      prog: p(row[6]),
+      no: p(row[0]) || no,
+      name,
+
+      target,
+      buy,
       eval: evalAmt,
-      pl1: p(row[8]), plr1: p(row[9]),
-      pl2: p(row[10]), plr2: p(row[11]),
+
+      // 종목요약에는 진행률 열이 없으므로 웹앱에서 계산
+      prog: target > 0
+        ? (buy / target * 100)
+        : 0,
+
+      // 기존 변수명은 다른 웹앱 로직과의 호환을 위해 유지
+      pl1: p(row[5]),       // 평가손익
+      plr1: p(row[6]),      // 평가수익률
+
+      dividend: p(row[7]),  // 누적 분배금
+      divr: p(row[8]),      // 분배수익률
+
+      pl2: p(row[9]),       // 총수익
+      plr2: p(row[10]),     // 총수익률
+
       cat: getCategory(name),
     });
   }
+
   return items;
 }
-
 // ── API 연결
 async function connectSheet() {
   const key = document.getElementById('api-key-input').value.trim();
@@ -347,30 +387,61 @@ async function connectSheet() {
 async function loadData(key) {
   document.getElementById('refresh-btn').textContent = '...';
   document.getElementById('error-area').innerHTML = '';
+
   try {
     const tab = encodeURIComponent(SHEET_TAB);
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tab}!A:L?key=${key}`;
+
+    // 종목요약의 현재 구조는 A:K
+    const url =
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tab}!A:K?key=${key}`;
+
     const res = await fetch(url);
+
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error?.message || `오류 ${res.status}`);
+
+      throw new Error(
+        j?.error?.message || `오류 ${res.status}`
+      );
     }
+
     const json = await res.json();
+
+    // 1행은 헤더이므로 제외
     const rows = (json.values || []).slice(1);
+
     allData = parseRows(rows);
-    if (allData.length === 0) throw new Error('종목요약 탭에서 데이터를 찾지 못했습니다.');
+
+    if (allData.length === 0) {
+      throw new Error(
+        '종목요약 탭에서 데이터를 찾지 못했습니다.'
+      );
+    }
+
     document.getElementById('update-time').textContent =
-      new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 기준 · 종목요약 탭';
+      new Date().toLocaleTimeString(
+        'ko-KR',
+        {
+          hour: '2-digit',
+          minute: '2-digit'
+        }
+      ) +
+      ' 기준 · 종목요약 탭';
+
     renderSummary();
     renderCards();
+
   } catch (e) {
+
     document.getElementById('error-area').innerHTML =
       `<div class="error-box">⚠ ${e.message}</div>`;
+
   } finally {
+
     document.getElementById('refresh-btn').textContent = '↻';
+
   }
 }
-
 async function refresh() {
   const key = localStorage.getItem('invest_api_key');
   if (key) await loadData(key);
@@ -395,22 +466,75 @@ function setMode(m) {
 // ── 요약
 function renderSummary() {
   const items = filtered();
-  const tBuy = items.reduce((s, d) => s + d.buy, 0);
-  const tEval = items.reduce((s, d) => s + d.eval, 0);
-  const pl = items.reduce((s, d) => s + (mode === 'pl1' ? d.pl1 : d.pl2), 0);
-  const pr = tBuy > 0 ? (pl / tBuy * 100) : 0;
-  const plLabel = mode === 'pl1' ? '수익1 (미실현)' : '수익2 (실현포함)';
-  document.getElementById('summary-grid').innerHTML = [
-    { label: '총 평가금액', val: fmt(tEval) + '원', cls: '' },
-    { label: '총 매수금액', val: fmt(tBuy) + '원', cls: '' },
-    { label: plLabel, val: fmt(pl) + '원', cls: clr(pl) },
-    { label: '수익률', val: fmtPct(pr), cls: clr(pr) },
-  ].map(c => `<div class="s-card">
-    <div class="s-label">${c.label}</div>
-    <div class="s-value ${c.cls}">${c.val}</div>
-  </div>`).join('');
-}
 
+  const tBuy = items.reduce(
+    (s, d) => s + d.buy,
+    0
+  );
+
+  const tEval = items.reduce(
+    (s, d) => s + d.eval,
+    0
+  );
+
+  const pl = items.reduce(
+    (s, d) =>
+      s + (
+        mode === 'pl1'
+          ? d.pl1
+          : d.pl2
+      ),
+    0
+  );
+
+  const pr =
+    tBuy > 0
+      ? (pl / tBuy * 100)
+      : 0;
+
+  const plLabel =
+    mode === 'pl1'
+      ? '평가손익'
+      : '총수익 (분배금 포함)';
+
+  document.getElementById('summary-grid').innerHTML = [
+
+    {
+      label: '총 평가금액',
+      val: fmt(tEval) + '원',
+      cls: ''
+    },
+
+    {
+      label: '총 매수금액',
+      val: fmt(tBuy) + '원',
+      cls: ''
+    },
+
+    {
+      label: plLabel,
+      val: fmt(pl) + '원',
+      cls: clr(pl)
+    },
+
+    {
+      label: '수익률',
+      val: fmtPct(pr),
+      cls: clr(pr)
+    }
+
+  ].map(c => `
+    <div class="s-card">
+      <div class="s-label">
+        ${c.label}
+      </div>
+
+      <div class="s-value ${c.cls}">
+        ${c.val}
+      </div>
+    </div>
+  `).join('');
+}
 // ── 카테고리
 function initCats() {
   document.getElementById('cat-row').innerHTML = CATS.map(c =>
@@ -444,47 +568,200 @@ function sorted(items) {
 // ── 카드
 function renderCards() {
   const items = sorted(filtered());
-  const wrap = document.getElementById('cards-wrap');
-  if (!items.length) { wrap.innerHTML = '<div class="empty">해당 종목이 없습니다</div>'; return; }
+
+  const wrap =
+    document.getElementById('cards-wrap');
+
+  if (!items.length) {
+    wrap.innerHTML =
+      '<div class="empty">해당 종목이 없습니다</div>';
+    return;
+  }
+
   wrap.innerHTML = items.map(d => {
-    const prog = Math.min(Math.max(d.prog, 0), 100);
-    return `<div class="stock-card${d.trade > 0 ? ' trade' : ''}">
-      <div class="card-top">
-        <div>
-          <div class="card-name">${d.name}${d.trade > 0 ? `<span class="trade-badge">매매 ${d.trade}주</span>` : ''}</div>
-          <div class="card-price">
-            <span style="color:var(--text);font-weight:500">목표 ${fmt(d.target)}원</span>
-            <span style="margin-left:6px;color:var(--hint)">현재 ${fmt(d.price)}원</span>
+
+    // 진행률 막대는 100%를 넘더라도
+    // 화면에서는 최대 100%까지만 표시
+    const progWidth =
+      Math.min(
+        Math.max(d.prog, 0),
+        100
+      );
+
+    return `
+
+      <div class="stock-card">
+
+        <!-- 종목명 / 평가금액 -->
+        <div class="card-top">
+
+          <div>
+
+            <div class="card-name">
+              ${d.name}
+            </div>
+
+            <div class="card-price">
+
+              <span
+                style="
+                  color:var(--text);
+                  font-weight:500
+                "
+              >
+                목표 ${fmt(d.target)}원
+              </span>
+
+              <span
+                style="
+                  margin-left:6px;
+                  color:var(--hint)
+                "
+              >
+                매수 ${fmt(d.buy)}원
+              </span>
+
+            </div>
+
           </div>
+
+
+          <div class="card-eval-wrap">
+
+            <div class="card-eval">
+              ${fmt(d.eval)}원
+            </div>
+
+            <div class="card-eval-lbl">
+              평가금액
+            </div>
+
+          </div>
+
         </div>
-        <div class="card-eval-wrap">
-          <div class="card-eval">${fmt(d.eval)}원</div>
-          <div class="card-eval-lbl">평가금액</div>
+
+
+        <!-- 목표금액 진행률 -->
+
+        <div class="prog-wrap">
+
+          <div class="prog-meta">
+
+            <span>
+              목표 진행률
+              ${d.prog.toFixed(1)}%
+            </span>
+
+            <span>
+              ${fmt(d.buy)}
+              /
+              ${fmt(d.target)}원
+            </span>
+
+          </div>
+
+
+          <div class="prog-bg">
+
+            <div
+              class="prog-fill"
+              style="
+                width:${progWidth}%
+              "
+            ></div>
+
+          </div>
+
         </div>
+
+
+        <!-- 평가손익 / 총수익 -->
+
+        <div class="pl-row">
+
+          <div class="pl-box">
+
+            <div class="pl-lbl">
+              평가손익
+            </div>
+
+            <div
+              class="
+                pl-amt
+                ${clr(d.pl1)}
+              "
+            >
+              ${fmt(d.pl1)}원
+            </div>
+
+            <div
+              class="
+                pl-pct
+                ${clr(d.plr1)}
+              "
+            >
+              ${fmtPct(d.plr1)}
+            </div>
+
+          </div>
+
+
+          <div class="pl-box">
+
+            <div class="pl-lbl">
+              총수익 (분배금 포함)
+            </div>
+
+            <div
+              class="
+                pl-amt
+                ${clr(d.pl2)}
+              "
+            >
+              ${fmt(d.pl2)}원
+            </div>
+
+            <div
+              class="
+                pl-pct
+                ${clr(d.plr2)}
+              "
+            >
+              ${fmtPct(d.plr2)}
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- 분배금 -->
+
+        <div
+          style="
+            margin-top:6px;
+            font-size:10px;
+            color:var(--hint);
+            text-align:right
+          "
+        >
+
+          누적 분배금
+          ${fmt(d.dividend)}원
+
+          ·
+
+          분배수익률
+          ${fmtPct(d.divr)}
+
+        </div>
+
       </div>
-      <div class="prog-wrap">
-        <div class="prog-meta">
-          <span>진행율 ${d.prog.toFixed(1)}%</span>
-          <span>매수 ${fmt(d.buy)}원</span>
-        </div>
-        <div class="prog-bg"><div class="prog-fill" style="width:${prog}%"></div></div>
-      </div>
-      <div class="pl-row">
-        <div class="pl-box">
-          <div class="pl-lbl">수익1 (미실현)</div>
-          <div class="pl-amt ${clr(d.pl1)}">${fmt(d.pl1)}원</div>
-          <div class="pl-pct ${clr(d.plr1)}">${fmtPct(d.plr1)}</div>
-        </div>
-        <div class="pl-box">
-          <div class="pl-lbl">수익2 (실현포함)</div>
-          <div class="pl-amt ${clr(d.pl2)}">${fmt(d.pl2)}원</div>
-          <div class="pl-pct ${clr(d.plr2)}">${fmtPct(d.plr2)}</div>
-        </div>
-      </div>
-    </div>`;
+
+    `;
+
   }).join('');
 }
-
 // ── 자산배분 → 종목현황 카테고리 이동
 function goToCategory(cat) {
   curCat = cat;

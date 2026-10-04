@@ -311,65 +311,58 @@ function getCategory(name) {
 
 function parseRows(values) {
   const items = [];
-  let no = 0;
 
   for (const row of values) {
     const name = String(row[1] || '').trim();
 
-    if (!name || /매매|순번|종목명|EFT|ETF|NO/i.test(name)) continue;
+    // 종목명이 없는 행 제외
+    if (!name) continue;
 
     const p = v =>
-      parseFloat(String(v ?? '0').replace(/[,%₩\s]/g, '')) || 0;
+      parseFloat(
+        String(v ?? '0').replace(/[,%₩\s]/g, '')
+      ) || 0;
 
-    // ─────────────────────────────────────
-    // 종목요약 탭 A:K
-    //
-    // A : 순번
-    // B : 종목명
-    // C : 목표금액
-    // D : 매수금액
-    // E : 평가금액
-    // F : 수익1 = 평가손익
-    // G : 수익율1 = 평가수익률
-    // H : 분배금
-    // I : 분배수익율
-    // J : 총수익
-    // K : 총수익율
-    // ─────────────────────────────────────
+    const no = p(row[0]);               // A 순번
+    const target = p(row[2]);           // C 목표금액
+    const buy = p(row[3]);              // D 매수금액
+    const evalAmt = p(row[4]);          // E 평가금액
+    const profit = p(row[5]);           // F 수익금액
+    const profitRate = p(row[6]);       // G 수익율
+    const dividend = p(row[7]);         // H 분배금
+    const dividendRate = p(row[8]);     // I 분배금 수익율
+    const totalProfit = p(row[9]);       // J 총수익
+    const totalProfitRate = p(row[10]); // K 총수익율
 
-    const target = p(row[2]);
-    const buy = p(row[3]);
-    const evalAmt = p(row[4]);
+    // 목표금액 대비 매수 진행률
+    const progress =
+      target > 0
+        ? (buy / target) * 100
+        : 0;
 
-    // 실제 투자금액이 없는 행은 제외
-    if (evalAmt < 1000 && buy < 1000) continue;
-
-    no++;
+    // 실제 투자 종목이 아닌 행 제외
+    if (buy < 1000 && evalAmt < 1000) continue;
 
     items.push({
-      no: p(row[0]) || no,
+      no,
       name,
 
       target,
       buy,
       eval: evalAmt,
 
-      // 종목요약에는 진행률 열이 없으므로 웹앱에서 계산
-      prog: target > 0
-        ? (buy / target * 100)
-        : 0,
+      profit,
+      profitRate,
 
-      // 기존 변수명은 다른 웹앱 로직과의 호환을 위해 유지
-      pl1: p(row[5]),       // 평가손익
-      plr1: p(row[6]),      // 평가수익률
+      dividend,
+      dividendRate,
 
-      dividend: p(row[7]),  // 누적 분배금
-      divr: p(row[8]),      // 분배수익률
+      totalProfit,
+      totalProfitRate,
 
-      pl2: p(row[9]),       // 총수익
-      plr2: p(row[10]),     // 총수익률
+      prog: progress,
 
-      cat: getCategory(name),
+      cat: getCategory(name)
     });
   }
 

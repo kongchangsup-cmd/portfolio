@@ -175,8 +175,8 @@
 
   <div class="ctrl-row">
     <div class="toggle-group">
-      <button class="toggle-btn on" id="btn-pl1" onclick="setMode('pl1')">평가손익</button>
-      <button class="toggle-btn" id="btn-pl2" onclick="setMode('pl2')">총수익</button>
+      <button class="toggle-btn on" id="btn-profit" onclick="setMode('profit')">수익</button>
+      <button class="toggle-btn" id="btn-total" onclick="setMode('total')">총수익</button>
     </div>
     <select id="sort-select" onchange="renderCards()">
       <option value="no">순번 순</option>
@@ -289,7 +289,7 @@ const ALLOC_ROWS = [
 
 let allData = [];
 let allocData = [];
-let mode = 'pl1';
+let mode = 'profit';
 let curCat = '전체';
 
 // ── 유틸
@@ -315,7 +315,7 @@ function parseRows(values) {
   for (const row of values) {
     const name = String(row[1] || '').trim();
 
-    // 종목명이 없는 행 제외
+    // 종목명이 없는 행은 제외
     if (!name) continue;
 
     const p = v =>
@@ -323,24 +323,44 @@ function parseRows(values) {
         String(v ?? '0').replace(/[,%₩\s]/g, '')
       ) || 0;
 
-    const no = p(row[0]);               // A 순번
-    const target = p(row[2]);           // C 목표금액
-    const buy = p(row[3]);              // D 매수금액
-    const evalAmt = p(row[4]);          // E 평가금액
-    const profit = p(row[5]);           // F 수익금액
-    const profitRate = p(row[6]);       // G 수익율
-    const dividend = p(row[7]);         // H 분배금
-    const dividendRate = p(row[8]);     // I 분배금 수익율
-    const totalProfit = p(row[9]);       // J 총수익
-    const totalProfitRate = p(row[10]); // K 총수익율
+    // ─────────────────────────────────────
+    // 종목요약 탭 구조
+    //
+    // A : 순번
+    // B : 종목명
+    // C : 목표금액
+    // D : 매수금액
+    // E : 평가금액
+    // F : 수익금액
+    // G : 수익율
+    // H : 분배금
+    // I : 분배금 수익율
+    // J : 총수익
+    // K : 총수익율
+    // ─────────────────────────────────────
 
-    // 목표금액 대비 매수 진행률
-    const progress =
+    const no = p(row[0]);
+
+    const target = p(row[2]);
+    const buy = p(row[3]);
+    const evalAmt = p(row[4]);
+
+    const profit = p(row[5]);
+    const profitRate = p(row[6]);
+
+    const dividend = p(row[7]);
+    const dividendRate = p(row[8]);
+
+    const totalProfit = p(row[9]);
+    const totalProfitRate = p(row[10]);
+
+    // 목표금액 대비 현재 매수금액 진행률
+    const prog =
       target > 0
         ? (buy / target) * 100
         : 0;
 
-    // 실제 투자 종목이 아닌 행 제외
+    // 실제 투자 데이터가 없는 행은 제외
     if (buy < 1000 && evalAmt < 1000) continue;
 
     items.push({
@@ -360,7 +380,7 @@ function parseRows(values) {
       totalProfit,
       totalProfitRate,
 
-      prog: progress,
+      prog,
 
       cat: getCategory(name)
     });
@@ -368,6 +388,7 @@ function parseRows(values) {
 
   return items;
 }
+  
 // ── API 연결
 async function connectSheet() {
   const key = document.getElementById('api-key-input').value.trim();
@@ -384,7 +405,7 @@ async function loadData(key) {
   try {
     const tab = encodeURIComponent(SHEET_TAB);
 
-    // 종목요약의 현재 구조는 A:K
+    // 종목요약 A~K 열 읽기
     const url =
       `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tab}!A:K?key=${key}`;
 
@@ -400,7 +421,7 @@ async function loadData(key) {
 
     const json = await res.json();
 
-    // 1행은 헤더이므로 제외
+    // 첫 번째 행은 헤더이므로 제외
     const rows = (json.values || []).slice(1);
 
     allData = parseRows(rows);
@@ -418,8 +439,7 @@ async function loadData(key) {
           hour: '2-digit',
           minute: '2-digit'
         }
-      ) +
-      ' 기준 · 종목요약 탭';
+      ) + ' 기준 · 종목요약 탭';
 
     renderSummary();
     renderCards();
@@ -435,6 +455,7 @@ async function loadData(key) {
 
   }
 }
+  
 async function refresh() {
   const key = localStorage.getItem('invest_api_key');
   if (key) await loadData(key);
@@ -450,74 +471,107 @@ function showScreen(id) {
 // ── 모드
 function setMode(m) {
   mode = m;
-  document.getElementById('btn-pl1').className = 'toggle-btn' + (m === 'pl1' ? ' on' : '');
-  document.getElementById('btn-pl2').className = 'toggle-btn' + (m === 'pl2' ? ' on' : '');
+
+  document.getElementById('btn-profit').className =
+    'toggle-btn' + (m === 'profit' ? ' on' : '');
+
+  document.getElementById('btn-total').className =
+    'toggle-btn' + (m === 'total' ? ' on' : '');
+
   renderSummary();
   renderCards();
 }
-
 // ── 요약
 function renderSummary() {
   const items = filtered();
 
-  const tBuy = items.reduce(
-    (s, d) => s + d.buy,
-    0
-  );
+  const totalBuy =
+    items.reduce(
+      (sum, d) => sum + d.buy,
+      0
+    );
 
-  const tEval = items.reduce(
-    (s, d) => s + d.eval,
-    0
-  );
+  const totalEval =
+    items.reduce(
+      (sum, d) => sum + d.eval,
+      0
+    );
 
-  const pl = items.reduce(
-    (s, d) =>
-      s + (
-        mode === 'pl1'
-          ? d.pl1
-          : d.pl2
-      ),
-    0
-  );
+  let profit;
+  let profitRate;
+  let profitLabel;
 
-  const pr =
-    tBuy > 0
-      ? (pl / tBuy * 100)
-      : 0;
+  if (mode === 'profit') {
 
-  const plLabel =
-    mode === 'pl1'
-      ? '평가손익'
-      : '총수익 (분배금 포함)';
+    // F열 수익금액 합계
+    profit =
+      items.reduce(
+        (sum, d) => sum + d.profit,
+        0
+      );
+
+    // 전체 수익율은 개별 수익율의 합이나 평균이 아니라
+    // 전체 수익금액 ÷ 전체 매수금액
+    profitRate =
+      totalBuy > 0
+        ? (profit / totalBuy) * 100
+        : 0;
+
+    profitLabel = '수익금액';
+
+  } else {
+
+    // J열 총수익 합계
+    profit =
+      items.reduce(
+        (sum, d) => sum + d.totalProfit,
+        0
+      );
+
+    // 전체 총수익율
+    profitRate =
+      totalBuy > 0
+        ? (profit / totalBuy) * 100
+        : 0;
+
+    profitLabel = '총수익';
+
+  }
 
   document.getElementById('summary-grid').innerHTML = [
 
     {
       label: '총 평가금액',
-      val: fmt(tEval) + '원',
+      val: fmt(totalEval) + '원',
       cls: ''
     },
 
     {
       label: '총 매수금액',
-      val: fmt(tBuy) + '원',
+      val: fmt(totalBuy) + '원',
       cls: ''
     },
 
     {
-      label: plLabel,
-      val: fmt(pl) + '원',
-      cls: clr(pl)
+      label: profitLabel,
+      val: fmt(profit) + '원',
+      cls: clr(profit)
     },
 
     {
-      label: '수익률',
-      val: fmtPct(pr),
-      cls: clr(pr)
+      label:
+        mode === 'profit'
+          ? '수익율'
+          : '총수익율',
+
+      val: fmtPct(profitRate),
+
+      cls: clr(profitRate)
     }
 
   ].map(c => `
     <div class="s-card">
+
       <div class="s-label">
         ${c.label}
       </div>
@@ -525,9 +579,11 @@ function renderSummary() {
       <div class="s-value ${c.cls}">
         ${c.val}
       </div>
+
     </div>
   `).join('');
 }
+
 // ── 카테고리
 function initCats() {
   document.getElementById('cat-row').innerHTML = CATS.map(c =>
@@ -548,18 +604,42 @@ function filtered() {
 }
 
 function sorted(items) {
-  const by = document.getElementById('sort-select').value;
+  const by =
+    document.getElementById('sort-select').value;
+
   return [...items].sort((a, b) => {
-    if (by === 'no')   return a.no - b.no;
-    if (by === 'eval') return b.eval - a.eval;
-    if (by === 'plr') return (mode === 'pl1' ? b.plr1 - a.plr1 : b.plr2 - a.plr2);
-    if (by === 'prog') return b.prog - a.prog;
+
+    // 순번
+    if (by === 'no') {
+      return a.no - b.no;
+    }
+
+    // 평가금액 높은 순
+    if (by === 'eval') {
+      return b.eval - a.eval;
+    }
+
+    // 수익률 높은 순
+    if (by === 'plr') {
+
+      if (mode === 'profit') {
+        return b.profitRate - a.profitRate;
+      }
+
+      return b.totalProfitRate - a.totalProfitRate;
+    }
+
+    // 목표 진행률 높은 순
+    if (by === 'prog') {
+      return b.prog - a.prog;
+    }
+
     return 0;
   });
 }
-
 // ── 카드
-function renderCards() {
+
+  function renderCards() {
   const items = sorted(filtered());
 
   const wrap =
@@ -573,8 +653,8 @@ function renderCards() {
 
   wrap.innerHTML = items.map(d => {
 
-    // 진행률 막대는 100%를 넘더라도
-    // 화면에서는 최대 100%까지만 표시
+    // 진행률 바는 100%를 초과해도
+    // 화면상 최대 100%까지만 표시
     const progWidth =
       Math.min(
         Math.max(d.prog, 0),
@@ -599,7 +679,7 @@ function renderCards() {
               <span
                 style="
                   color:var(--text);
-                  font-weight:500
+                  font-weight:500;
                 "
               >
                 목표 ${fmt(d.target)}원
@@ -608,7 +688,7 @@ function renderCards() {
               <span
                 style="
                   margin-left:6px;
-                  color:var(--hint)
+                  color:var(--hint);
                 "
               >
                 매수 ${fmt(d.buy)}원
@@ -634,21 +714,18 @@ function renderCards() {
         </div>
 
 
-        <!-- 목표금액 진행률 -->
+        <!-- 목표 진행률 -->
 
         <div class="prog-wrap">
 
           <div class="prog-meta">
 
             <span>
-              목표 진행률
-              ${d.prog.toFixed(1)}%
+              목표 진행률 ${d.prog.toFixed(1)}%
             </span>
 
             <span>
-              ${fmt(d.buy)}
-              /
-              ${fmt(d.target)}원
+              ${fmt(d.buy)} / ${fmt(d.target)}원
             </span>
 
           </div>
@@ -658,9 +735,7 @@ function renderCards() {
 
             <div
               class="prog-fill"
-              style="
-                width:${progWidth}%
-              "
+              style="width:${progWidth}%"
             ></div>
 
           </div>
@@ -668,32 +743,22 @@ function renderCards() {
         </div>
 
 
-        <!-- 평가손익 / 총수익 -->
+        <!-- 수익금액 / 총수익 -->
 
         <div class="pl-row">
 
           <div class="pl-box">
 
             <div class="pl-lbl">
-              평가손익
+              수익금액
             </div>
 
-            <div
-              class="
-                pl-amt
-                ${clr(d.pl1)}
-              "
-            >
-              ${fmt(d.pl1)}원
+            <div class="pl-amt ${clr(d.profit)}">
+              ${fmt(d.profit)}원
             </div>
 
-            <div
-              class="
-                pl-pct
-                ${clr(d.plr1)}
-              "
-            >
-              ${fmtPct(d.plr1)}
+            <div class="pl-pct ${clr(d.profitRate)}">
+              ${fmtPct(d.profitRate)}
             </div>
 
           </div>
@@ -702,25 +767,15 @@ function renderCards() {
           <div class="pl-box">
 
             <div class="pl-lbl">
-              총수익 (분배금 포함)
+              총수익
             </div>
 
-            <div
-              class="
-                pl-amt
-                ${clr(d.pl2)}
-              "
-            >
-              ${fmt(d.pl2)}원
+            <div class="pl-amt ${clr(d.totalProfit)}">
+              ${fmt(d.totalProfit)}원
             </div>
 
-            <div
-              class="
-                pl-pct
-                ${clr(d.plr2)}
-              "
-            >
-              ${fmtPct(d.plr2)}
+            <div class="pl-pct ${clr(d.totalProfitRate)}">
+              ${fmtPct(d.totalProfitRate)}
             </div>
 
           </div>
@@ -733,19 +788,51 @@ function renderCards() {
         <div
           style="
             margin-top:6px;
-            font-size:10px;
-            color:var(--hint);
-            text-align:right
+            padding:7px 9px;
+            background:var(--input-bg);
+            border-radius:8px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
           "
         >
 
-          누적 분배금
-          ${fmt(d.dividend)}원
+          <div
+            style="
+              font-size:10px;
+              color:var(--hint);
+            "
+          >
+            분배금
+          </div>
 
-          ·
+          <div
+            style="
+              text-align:right;
+            "
+          >
 
-          분배수익률
-          ${fmtPct(d.divr)}
+            <span
+              style="
+                font-size:11px;
+                font-weight:600;
+                color:var(--text);
+              "
+            >
+              ${fmt(d.dividend)}원
+            </span>
+
+            <span
+              style="
+                font-size:10px;
+                color:var(--sub);
+                margin-left:5px;
+              "
+            >
+              ${fmtPct(d.dividendRate)}
+            </span>
+
+          </div>
 
         </div>
 
@@ -755,6 +842,7 @@ function renderCards() {
 
   }).join('');
 }
+  
 // ── 자산배분 → 종목현황 카테고리 이동
 function goToCategory(cat) {
   curCat = cat;

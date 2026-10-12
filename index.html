@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>내 투자 현황</title>
@@ -127,6 +127,20 @@
   .neg { color: var(--neg); }
   .empty { text-align: center; padding: 32px; font-size: 13px; color: var(--hint); }
   .loading { text-align: center; padding: 32px; font-size: 13px; color: var(--hint); }
+
+body { padding-bottom:env(safe-area-inset-bottom); }
+.screen { max-width:440px; margin:auto; }
+.tab-bar { padding-bottom:env(safe-area-inset-bottom); }
+.icon-btn,.toggle-btn,.cat-btn,select,summary { min-height:44px; }
+.s-label,.pl-lbl,.card-price,.prog-meta,.tab-label { font-size:12px; color:var(--sub); }
+.s-value,.card-eval { font-size:17px; }
+input[type=password],input[type=text] { font-size:16px; }
+summary { cursor:pointer; padding:12px 0; font-size:13px; color:var(--blue); }
+.compact-profit { font-size:13px; padding-bottom:9px; }
+.change-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:12px; font-size:13px; line-height:1.8; }
+body.hide-balances .screen { filter:blur(8px); pointer-events:none; user-select:none; }
+#privacy-toggle { position:fixed; right:12px; top:70px; z-index:40; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:10px; min-height:44px; }
+
 </style>
 </head>
 <body>
@@ -273,7 +287,7 @@ const SHEET_ID = '1hC2y_8GiZ_Nz18Fe7XvC_Ve1D7urxpCQTYpGvBvJgGU';
 const SHEET_TAB = '종목요약';
 const ALLOC_TAB = '자산배분';   // ← 자산배분 탭명
 const DAILY_ASSET_TAB = '일일자산현황';
-const CATS = ['전체','미국주식','한국주식','기타주식','미국채권','한국채권','원자재','리츠/자산','현금성'];
+const CATS = ['전체','미국주식','한국주식','기타주식','미국채권','한국채권','원자재','리츠/자산','현금성','미분류'];
 
 // 자산배분 탭에서 읽을 행/열 정의
 // 행: 8~15 (0-based index: 7~14), 열: D=3, G=6, H=7, J=9, K=10, L=11, M=12
@@ -307,7 +321,7 @@ function getCategory(name) {
   if (/SOFR/.test(name)) return '미국채권';
   if (/머니마켓|초단기채권|CD금리/.test(name)) return '현금성';
   if (/미국|나스닥|S&P|테슬라|엔비디아|구글|메디컬|양자/.test(name)) return '미국주식';
-  return '한국주식';
+  return '미분류';
 }
 
 function parseRows(values) {
@@ -347,13 +361,13 @@ function parseRows(values) {
     const evalAmt = p(row[4]);
 
     const profit = p(row[5]);
-    const profitRate = p(row[6]);
+    const profitRate = parsePercent(row[6]);
 
     const dividend = p(row[7]);
-    const dividendRate = p(row[8]);
+    const dividendRate = parsePercent(row[8]);
 
     const totalProfit = p(row[9]);
-    const totalProfitRate = p(row[10]);
+    const totalProfitRate = parsePercent(row[10]);
 
     // 목표금액 대비 현재 매수금액 진행률
     const prog =
@@ -383,7 +397,7 @@ function parseRows(values) {
 
       prog,
 
-      cat: getCategory(name)
+      cat: CATS.includes(String(row[11] || '').trim()) ? String(row[11]).trim() : getCategory(name)
     });
   }
 
@@ -408,7 +422,7 @@ async function loadData(key) {
 
     // 종목요약 A~K 열 읽기
     const url =
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tab}!A:K?key=${key}`;
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tab}!A:L?key=${key}`;
 
     const res = await fetch(url);
 
@@ -423,7 +437,12 @@ async function loadData(key) {
     const json = await res.json();
 
     // 첫 번째 행은 헤더이므로 제외
-    const rows = (json.values || []).slice(1);
+    const sourceRows = json.values || [];
+    const normalize = v => String(v || '').replace(/\s/g, '').replace(/율/g,'률');
+    const headers = (sourceRows[0] || []).map(normalize);
+    const expected = ['순번','종목명','목표금액','매수금액','평가금액','수익금액','수익률','분배금','분배금수익률','총수익','총수익률','자산분류'];
+    const indexes = expected.map((name,i) => {const found=headers.indexOf(name);return found >= 0 ? found : i;});
+    const rows = sourceRows.slice(1).map(row => indexes.map(i=>row[i]));
 
     allData = parseRows(rows);
 
@@ -440,7 +459,7 @@ async function loadData(key) {
           hour: '2-digit',
           minute: '2-digit'
         }
-      ) + ' 기준 · 종목요약 탭';
+      ) + ' 조회 · 종목요약 기준일 미제공';
 
     renderSummary();
     renderCards();
@@ -666,13 +685,14 @@ function sorted(items) {
 
       <div class="stock-card">
 
+        <div class="compact-profit ${clr(mode === 'profit' ? d.profit : d.totalProfit)}">${mode === 'profit' ? '평가수익' : '분배금 포함 수익'} ${fmt(mode === 'profit' ? d.profit : d.totalProfit)}원 · ${fmtPct(mode === 'profit' ? d.profitRate : d.totalProfitRate)}</div>
         <!-- 종목명 / 평가금액 -->
         <div class="card-top">
 
           <div>
 
             <div class="card-name">
-              ${d.name}
+              ${escapeHtml(d.name)}
             </div>
 
             <div class="card-price">
@@ -715,7 +735,7 @@ function sorted(items) {
         </div>
 
 
-        <!-- 목표 진행률 -->
+        <details><summary>목표·수익·분배금 자세히 보기</summary><!-- 목표 진행률 -->
 
         <div class="prog-wrap">
 
@@ -837,7 +857,7 @@ function sorted(items) {
 
         </div>
 
-      </div>
+      </details></div>
 
     `;
 
@@ -948,7 +968,7 @@ async function renderAsset() {
         }
       ) +
 
-      ` 기준 · ${cur년도}년 자동`;
+      ` 조회 · ${cur년도}년 자산이력`;
 
 
     const {
@@ -2000,11 +2020,11 @@ async function refreshAlloc() {
         ...def,
         targetAmt: p(row[COL.D]),   // D열: 목표금액
         sheetBuy:  p(row[COL.G]),   // G열: 매수금액
-        targetPct: p(row[COL.H]),   // H열: 목표비중(%)
+        targetPct: parsePercent(row[COL.H]),   // H열: 목표비중(%)
         sheetEval: p(row[COL.J]),   // J열: 평가금액
         plAmt:     p(row[COL.K]),   // K열: 수익금액
-        plr:       p(row[COL.L]),   // L열: 수익률(%)
-        progress:  p(row[COL.M]),   // M열: 진행율(%)
+        plr:       parsePercent(row[COL.L]),   // L열: 수익률(%)
+        progress:  parsePercent(row[COL.M]),   // M열: 진행율(%)
       };
     });
 
@@ -2015,7 +2035,7 @@ async function refreshAlloc() {
     const totalPr   = totalBuy > 0 ? (totalPl / totalBuy * 100) : 0;
 
     document.getElementById('alloc-time').textContent =
-      new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) + ' 기준 · 자산배분 탭';
+      new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) + ' 조회 · 자산배분 기준일 미제공';
 
     // 요약 4개 카드
     document.getElementById('alloc-summary').innerHTML = [
@@ -2066,7 +2086,7 @@ function renderAllocBody(rows, totalEval) {
     <div style="font-size:11px;font-weight:600;color:var(--hint);letter-spacing:.5px;margin-bottom:10px;text-transform:uppercase">자산군별 배분 현황</div>
 
     ${rows.map(r => {
-      const barWidth = Math.min(r.progress, 200) / Math.max(r.progress, 100) * 100;
+      const barWidth = Math.max(0, Math.min(r.progress, 100));
       const cappedBar = Math.min(barWidth, 100);
       return `
       <div onclick="goToCategory('${r.key}')"
@@ -2080,7 +2100,7 @@ function renderAllocBody(rows, totalEval) {
             </div>
             <div style="font-size:11px;color:var(--hint);padding-left:17px">
               목표비중 <strong style="color:var(--text)">${r.targetPct.toFixed(2)}%</strong>
-              &nbsp;·&nbsp; 매수 ${fmt(r.sheetBuy)}원
+              <br>현재 ${totalEval > 0 ? (r.sheetEval / totalEval * 100).toFixed(2) : '—'}% · 차이 ${totalEval > 0 ? ((r.sheetEval / totalEval * 100 - r.targetPct) >= 0 ? '+' : '') + (r.sheetEval / totalEval * 100 - r.targetPct).toFixed(2) + '%p' : '—'}<br>매수 ${fmt(r.sheetBuy)}원
             </div>
           </div>
           <div style="text-align:right">
@@ -2139,7 +2159,7 @@ async function loadAssetData(key) {
   const j2 = await r2.json();
 
   const p = v => parseFloat(String(v||'0').replace(/[,%₩]/g,'')) || 0;
-  const pPct = v => { const n = parseFloat(String(v||'0').replace(/[,%₩]/g,'')); return Math.abs(n) < 2 ? n*100 : n; };
+  const pPct = v => parsePercent(v);
 
   const prev_ar = (j1.values||[[]])[0] || [];
   const ar      = (j1.values||[[]])[1] || [];
@@ -2328,6 +2348,8 @@ async function loadDailyAssetData(key) {
   }
 
 
+  const today = new Date(); today.setHours(23,59,59,999);
+  data.splice(0, data.length, ...data.filter(d => d.date <= today));
   data.sort(
     (a, b) =>
       a.date - b.date
@@ -2410,6 +2432,12 @@ function setDailyAssetRange(range) {
     });
 
 
+  const summary = document.getElementById('daily-range-summary');
+  if (summary) {
+    const temp = document.createElement('div');
+    temp.innerHTML = getDailyAssetChartHtml();
+    summary.innerHTML = temp.querySelector('#daily-range-summary')?.innerHTML || '';
+  }
   drawDailyAssetChart();
 }
 
@@ -2518,7 +2546,7 @@ function getDailyAssetChartHtml() {
       "
     >
 
-      <!-- 제목 -->
+      <div id="daily-range-summary"> <!-- 제목 -->
 
       <div
         style="
@@ -2569,7 +2597,7 @@ function getDailyAssetChartHtml() {
               margin-bottom:2px;
             "
           >
-            기간 변화
+            자산 증감
           </div>
 
           <div
@@ -2598,7 +2626,7 @@ function getDailyAssetChartHtml() {
       </div>
 
 
-      <!-- 기간 버튼 -->
+      </div><!-- 기간 버튼 -->
 
       <div
         style="
@@ -3157,12 +3185,72 @@ window.onload = () => {
   const savedKey = localStorage.getItem('invest_api_key');
   if (savedKey) {
     showScreen('asset-screen');
-    renderAsset();
+    switchTab('asset');
     loadData(savedKey);
   } else {
     showScreen('setup-screen');
   }
 };
+
+// Sheets API formatted values: percentage strings and bare numbers are percentage points.
+// No magnitude-based guessing; zero and values under 2 remain unchanged.
+function parsePercent(v) {
+  const n = Number(String(v ?? '').replace(/[,%₩\s]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+const originalRenderAsset = renderAsset;
+renderAsset = async function() {
+  await originalRenderAsset();
+  const body = document.getElementById('asset-body');
+  if (!body.querySelector('#daily-asset-chart')) return;
+  const data = dailyAssetData;
+  const latest = data.at(-1);
+  const prior = offset => latest && data.filter(d => d.date <= new Date(latest.date.getFullYear(),latest.date.getMonth(),latest.date.getDate()-offset)).at(-1);
+  const show = (label,p) => !p ? `<div>${label}: 비교 기록 없음</div>` : `<div>${label} (${p.fullLabel} 대비): <strong class="${clr(latest.value-p.value)}">${latest.value-p.value>=0?'+':''}${fmt(latest.value-p.value)}원 · ${fmtPct((latest.value/p.value-1)*100)}</strong></div>`;
+  const card = document.createElement('div'); card.className='change-card';
+  card.innerHTML = `<strong>최근 자산 변화</strong><div>데이터 기준 ${latest ? latest.fullLabel : '미제공'}</div>${show('전일',prior(1))}${show('전주',prior(7))}<div style="color:var(--sub)">입출금을 포함한 자산 증감입니다. 기록이 없으면 이전 기록과 비교합니다.</div>`;
+  body.prepend(card);
+};
+let refreshingAll=false;
+async function refreshAll() {
+  const key=localStorage.getItem('invest_api_key'); if(!key || refreshingAll) return;
+  refreshingAll=true;
+  const buttons=[...document.querySelectorAll('[data-refresh-all]')];
+  buttons.forEach(b=>{b.disabled=true;b.textContent='…';});
+  try { await Promise.all([loadData(key),refreshAlloc(),renderAsset()]); }
+  finally { refreshingAll=false;buttons.forEach(b=>{b.disabled=false;b.textContent='↻';}); }
+}
+document.querySelectorAll('.topbar-btns').forEach(group=>{
+  let btn=group.querySelector('[id$="refresh-btn"]');
+  if(!btn){btn=document.createElement('button');btn.className='icon-btn';btn.textContent='↻';group.prepend(btn);}
+  btn.onclick=refreshAll;btn.dataset.refreshAll='true';btn.setAttribute('aria-label','모든 투자 데이터 새로고침');
+});
+const privacy=document.createElement('button');privacy.id='privacy-toggle';privacy.textContent='화면 숨기기';
+privacy.onclick=()=>{const hidden=document.body.classList.toggle('hide-balances');privacy.textContent=hidden?'화면 보기':'화면 숨기기';privacy.setAttribute('aria-pressed',String(hidden));};document.body.append(privacy);
+
+const originalLoadData=loadData;
+loadData=async function(key) {
+  let previous=null;
+  try { previous=JSON.parse(localStorage.getItem('invest_snapshot') || 'null'); } catch {}
+  const before=document.getElementById('update-time').textContent;
+  await originalLoadData(key);
+  if(document.getElementById('error-area').textContent.trim() || !allData.length) return;
+  if(previous?.items && previous.sheet===SHEET_ID){
+    const changes=allData.map(d=>{
+      const old=previous.items.find(p=>p.name===d.name);
+      return old && old.buy===d.buy ? {name:d.name,delta:d.eval-old.eval} : null;
+    }).filter(Boolean).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta)).slice(0,3);
+    const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    document.getElementById('snapshot-changes')?.remove();
+    const card=document.createElement('div');card.id='snapshot-changes';card.className='change-card';
+    card.innerHTML=`<strong>평가금액 변화 상위 종목</strong><div>이전 조회 ${esc(new Date(previous.at).toLocaleString('ko-KR'))} 대비</div>${changes.map(d=>`<div>${esc(d.name)} <strong class="${clr(d.delta)}">${d.delta>=0?'+':''}${fmt(d.delta)}원</strong></div>`).join('') || '<div>비교 가능한 종목 없음</div>'}<div style="color:var(--sub)">매수금액이 동일한 종목만 비교합니다. 전일 수익이나 확정 투자성과가 아닙니다.</div>`;
+    document.getElementById('summary-grid').after(card);
+  }
+  try{localStorage.setItem('invest_snapshot',JSON.stringify({sheet:SHEET_ID,at:Date.now(),items:allData.map(d=>({name:d.name,buy:d.buy,eval:d.eval}))}));}catch{}
+};
+
+function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
 </script>
 </body>
 </html>
